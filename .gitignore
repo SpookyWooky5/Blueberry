@@ -1,3 +1,20 @@
-# Secrets and PII
+Docs
+Tests
 
-.env
+Configs/.env
+Configs/*.yml
+Configs/*.json
+
+__pycache__
+*/__pycache__
+*/*/__pycache__
+
+.venv
+*/.venv
+*/*/.venv
+
+*.db
+*.sqlite3
+.python*
+*uv*
+*tmp*

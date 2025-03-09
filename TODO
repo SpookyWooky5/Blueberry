@@ -1,1 +1,6 @@
-- Add alias dev, scr, src
+- Add DB and DB Integration for both mails and LLM Messages
+- Add LLM Integration
+- Add Obsidian Integration
+- Add NetNode
+- Add Tests
+- Add Docs
