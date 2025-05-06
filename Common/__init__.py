@@ -1,1 +1,1 @@
-from .utils import load_secrets, load_config
+from .utils import load_secrets, load_config, read_file_from_cfg

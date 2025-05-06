@@ -1,6 +1,13 @@
-- Add DB and DB Integration for both mails and LLM Messages
-- Add LLM Integration
+- DB Utils in bash
+- Response cache? RAG? Summarizer?
+- Make use of summaries
+- check log levels of all statements
 - Add Obsidian Integration
+- Add Parent mail checking functionality
+- read mails frequently but reply only periodically?
+- /sudo, and other tools
+- MCP
+- Add LLM Integration
 - Add NetNode
 - Add Tests
 - Add Docs

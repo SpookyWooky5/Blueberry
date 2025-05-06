@@ -1,5 +1,5 @@
 CREATE TABLE emails (
-  id SERIAL PRIMARY KEY,                        -- Unique ID for each mail
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,                        -- Unique ID for each mail
   message_id VARCHAR(255) NOT NULL,             -- Identifier for the mail thread
   to_addr VARCHAR(255) NOT NULL,
   to_name VARCHAR(255),
@@ -8,14 +8,14 @@ CREATE TABLE emails (
   subject VARCHAR(255),
   body TEXT,
   time_recevied TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  child_of INTEGER,                             -- References id of a parent mail in the thread (nullable)
-  CONSTRAINT fk_child FOREIGN KEY (child_of) REFERENCES emails(id)
+  child_of VARCHAR(255),                             -- References id of a parent mail in the thread (nullable)
+  CONSTRAINT fk_child FOREIGN KEY (child_of) REFERENCES emails(message_id)
 );
 
 
 CREATE TABLE summaries (
-  id SERIAL PRIMARY KEY,
-  message_id VARCHAR(255) NOT NULL,             -- Should correspond to mail_logs.message_id
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  message_id VARCHAR(255) NOT NULL,             -- Should correspond to emails.message_id
   to_addr VARCHAR(255) NOT NULL,
   to_name VARCHAR(255),
   from_addr VARCHAR(255) NOT NULL,
@@ -28,12 +28,12 @@ CREATE TABLE summaries (
   thoughts TEXT,
   gratitutes TEXT,
   date_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_summary_message FOREIGN KEY (message_id) REFERENCES mail_logs(message_id)
+  CONSTRAINT fk_summary_message FOREIGN KEY (message_id) REFERENCES emails(message_id)
 );
 
 
 CREATE TABLE obsidian_changes_history (
-  id SERIAL PRIMARY KEY,
+  id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   message_id VARCHAR(255),                      -- Reference to mail or conversation thread (optional)
   context TEXT,                                 -- Context from the conversation (e.g., email or chat excerpt)
   requested_change TEXT,                        -- What you asked the bot to add/change

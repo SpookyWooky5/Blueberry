@@ -36,3 +36,12 @@ def load_config():
         except Exception as e:
             print(e)
     return data
+
+def read_file_from_cfg(filepath):
+	# filename = filename.strip().lower().replace("_", "").replace(" ", "").split(".")[0]
+	LOGGER.debug(f"Opening {filepath} from Config")
+	try:
+		with open(os.path.join(CFGDIR, filepath)) as f:
+			return "\n".join(f.readlines())
+	except Exception as e:
+		LOGGER.error(f"Unable to open {filepath}, {e}")

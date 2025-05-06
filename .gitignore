@@ -5,6 +5,10 @@ Configs/.env
 Configs/*.yml
 Configs/*.json
 
+Data/*
+
+*models/*
+
 __pycache__
 */__pycache__
 */*/__pycache__
