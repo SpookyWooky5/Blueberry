@@ -1,9 +1,8 @@
-- DB Utils in bash
 - Response cache? RAG? Summarizer?
 - Make use of summaries
 - check log levels of all statements
 - Add Obsidian Integration
-- Add Parent mail checking functionality
+- Add Parent mail checking functionality and check child of
 - read mails frequently but reply only periodically?
 - /sudo, and other tools
 - MCP

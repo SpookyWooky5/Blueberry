@@ -45,3 +45,12 @@ def read_file_from_cfg(filepath):
 			return "\n".join(f.readlines())
 	except Exception as e:
 		LOGGER.error(f"Unable to open {filepath}, {e}")
+
+def escape_special_chars(s):
+	return (
+        s.replace('\\', '\\\\')    # first escape any existing backslashes
+         .replace('\n', '\\n')
+         .replace('\r', '\\r')
+         .replace('\t', '\\t')
+         .replace('"',  '""')      # if you ever dump as CSV later
+    )

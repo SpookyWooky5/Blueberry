@@ -7,20 +7,21 @@
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
-import sys
 import time
 import email
 import imaplib
 import smtplib
 
+from collections import defaultdict
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from Common import load_secrets, load_config
+from Common import load_secrets, load_config, escape_special_chars
 from Common.Logging import logger_init
 from Common.Database import connect_to_db
+from MainNode.MailServer.auth import imap_auth, check_smtp_auth
 
-from MainNode.LLM.main import BaseChatbot
+from MainNode.LLM import BaseChatbot
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")
@@ -39,42 +40,27 @@ del secrets
 MAILCFG   = load_config()["MailServer"]
 
 # ================================= FUNCTIONS ================================ #
-def imap_auth():
-	LOGGER.debug("Logging into blueberry IMAP...")
-	try:
-		mailserver = imaplib.IMAP4_SSL(IMAP_HOST)
-		mailserver.login(EMAIL, PASSWORD)
-		mailserver.select('inbox')
-		LOGGER.info("Logged in to blueberry IMAP")
-	except Exception as e:
-		LOGGER.error(f"Could not log into IMAP: {e}")
-		sys.exit(1)
-	return mailserver
-
-def check_smtp_auth():
-	LOGGER.debug("Logging into blueberry SMTP...")
-	try:
-		mailserver = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
-		mailserver.login(EMAIL, PASSWORD)
-		LOGGER.info("Logged in to blueberry SMTP")
-	except Exception as e:
-		LOGGER.error(f"Could not log into SMTP: {e}")
-		sys.exit(1)
 
 def main():
 	# Login to Zoho
 	imap_server = imap_auth()
+	imap_server.select('inbox')
 	check_smtp_auth()
 
 	# Connect to DB
 	conn, curr = connect_to_db()
+
+	client_state_dict = defaultdict(int)
 
 	# Init LLM
 	llm = BaseChatbot("Qwen3Full")
 
 	while True:
 		try:
-			# Select unseen mails from clients
+
+			# Dynamically read file and load clients in case of any change
+			CLIENTS = load_secrets()["Mail"]["Clients"]
+			client_state_dict = defaultdict(int)
 			LOGGER.debug(f"Querying unseen mails from {len(CLIENTS)} client(s)")
 			
 			status, _ = imap_server.noop()
@@ -82,19 +68,24 @@ def main():
 				LOGGER.warning("IMAP NOOP Failed. Reconnecting...")
 				imap_server.logout()
 				imap_server = imap_auth()
+				imap_server.select('inbox')
 
+			# Select unseen mails from clients
 			all_ids = set()
 			for client in CLIENTS:
 				status, data = imap_server.search(None, 'UNSEEN', 'FROM', client)
 				if status == 'OK':
 					ids = data[0].split()
-					all_ids.update(ids)
-			mail_ids = list(all_ids)
+					if ids:
+						all_ids.update(ids)
+						client_state_dict[client] = 1
+			mail_ids = sorted(map(int, all_ids))
 
 			LOGGER.info(f"Found {len(mail_ids)} mails")
 		except imaplib.IMAP4.abort:
 			LOGGER.debug("IMAP Connection aborted. Reconnecting...")
 			imap_server = imap_auth()
+			imap_server.select('inbox')
 			continue
 		except Exception as e:
 			LOGGER.debug(f"Could not fetch mails: {e},\ntrying again in {MAILCFG['CheckInterval']} seconds")
@@ -115,8 +106,9 @@ def main():
 					LOGGER.warning("IMAP NOOP Failed. Reconnecting...")
 					imap_server.logout()
 					imap_server = imap_auth()
+					imap_server.select('inbox')
 
-				_, raw_mail = imap_server.fetch(mail_id, "(RFC822)")
+				_, raw_mail = imap_server.fetch(str(mail_id).encode(), "(RFC822)")
 			except Exception as e:
 				LOGGER.error(f"Could not fetch mail {mail_id} from {IMAP_HOST}: {e}")
 				continue
@@ -175,7 +167,8 @@ def main():
 						from_name, subject, body) VALUES (?, ?, ?, ?, ?, ?, ?)
 						''',
 						(msg_id, to_addr, to_name,
-						from_addr, from_name, subject, body)
+						from_addr, from_name, subject,
+						escape_special_chars(body))
 					)
 					conn.commit()
 					LOGGER.debug("Inserted record in table 'emails'")
@@ -192,62 +185,67 @@ def main():
 				LOGGER.warning("IMAP NOOP Failed. Reconnecting...")
 				imap_server.logout()
 				imap_server = imap_auth()
-			imap_server.store(mail_id, "+FLAGS", "\\Seen")
+				imap_server.select('inbox')
+			imap_server.store(str(mail_id).encode(), "+FLAGS", "\\Seen")
 
 
 
 		# Call LLM for response
-		LOGGER.debug("Calling LLM to generate response")
-		llm.init_history("mail", from_addr)
-		llm_output = llm.generate_response()
-		response_msg_id = email.utils.make_msgid()
+		for client in CLIENTS:
+			llm_output = None
+			if client_state_dict[client] != 0:
+				LOGGER.debug("Calling LLM to generate response")
+				llm.init_history("mail", client)
+				llm_output = llm.generate_response()
+				response_msg_id = email.utils.make_msgid()
 		
-		# Add LLM response to DB
-		if llm_output is not None:
+			# Add LLM response to DB
+			if llm_output is not None:
+				client_state_dict[client] = 0
+				try:
+					LOGGER.debug(f"Inserting response of {msg_id} into table 'emails'")
+					curr.execute(
+						'''
+						INSERT INTO emails(message_id, to_addr, to_name, from_addr,
+						from_name, subject, body) VALUES (?, ?, ?, ?, ?, ?, ?)
+						''',
+						(response_msg_id, from_addr, from_name,
+						to_addr, to_name, subject,
+						escape_special_chars(llm_output))
+					)
+					conn.commit()
+					LOGGER.debug("Inserted record in table 'emails'")
+				except Exception as e:
+					LOGGER.error(f"Could not insert mail {msg_id} in table 'emails': {e}")
+					conn.rollback()
+			else:
+				continue
+
+			# Send response in reply
+			response_mail = MIMEMultipart()
+			response_mail["From"] = EMAIL
+			response_mail["To"] = from_addr
+			response_mail["Subject"] = subject
+			response_mail["Message-ID"] = response_msg_id
+			response_mail["In-Reply-To"] = msg_id
+			response_mail["References"] = " ".join(parent_refs)
+
+			# Thread Index
+			# response_mail["Thread-Index"] = base64.b64encode(hashlib.md5(msg_id.encode()).digest()).decode()
+			
+			response_mail.attach(
+				MIMEText(llm_output, "plain")
+			)
+			LOGGER.debug("Response mail formatted")
+
 			try:
-				LOGGER.debug(f"Inserting response of {msg_id} into table 'emails'")
-				curr.execute(
-					'''
-					INSERT INTO emails(message_id, to_addr, to_name, from_addr,
-					from_name, subject, body, child_of) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-					''',
-					(response_msg_id, from_addr, from_name,
-					to_addr, to_name, subject,
-					llm_output, mail_id)
-				)
-				conn.commit()
-				LOGGER.debug("Inserted record in table 'emails'")
+				LOGGER.debug("Sending mail to client...")
+				with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp_server:
+					smtp_server.login(EMAIL, PASSWORD)
+					smtp_server.sendmail(EMAIL, from_addr, response_mail.as_string())
 			except Exception as e:
-				LOGGER.error(f"Could not insert mail {msg_id} in table 'emails': {e}")
-				conn.rollback()
-		else:
-			continue
-
-		# Send response in reply
-		response_mail = MIMEMultipart()
-		response_mail["From"] = EMAIL
-		response_mail["To"] = from_addr
-		response_mail["Subject"] = subject
-		response_mail["Message-ID"] = response_msg_id
-		response_mail["In-Reply-To"] = msg_id
-		response_mail["References"] = " ".join(parent_refs)
-
-		# Thread Index
-		# response_mail["Thread-Index"] = base64.b64encode(hashlib.md5(msg_id.encode()).digest()).decode()
-		
-		response_mail.attach(
-			MIMEText(llm_output, "plain")
-		)
-		LOGGER.debug("Response mail formatted")
-
-		try:
-			LOGGER.debug("Sending mail to client...")
-			with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp_server:
-				smtp_server.login(EMAIL, PASSWORD)
-				smtp_server.sendmail(EMAIL, from_addr, response_mail.as_string())
-		except Exception as e:
-			LOGGER.error(f"Error occured while sending mail, {e}")
-			continue
+				LOGGER.error(f"Error occured while sending mail, {e}")
+				continue
 	
 
 # =================================== MAIN =================================== #
