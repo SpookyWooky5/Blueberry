@@ -11,8 +11,8 @@ import sys
 import smtplib
 import imaplib
 
-from Common import load_secrets
-from Common.Logging import logger_init
+from utils import load_secrets
+from Logging import logger_init
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")

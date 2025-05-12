@@ -9,10 +9,11 @@
 # ================================== IMPORTS ================================= #
 import os
 import sys
-import csv
 import sqlite3
 
-from Common.Logging import logger_init
+import dataset
+
+from Logging import logger_init
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("Database")
@@ -34,15 +35,12 @@ def connect_to_db():
 		sys.exit(1)
 	return conn, curr
 
-def dump_table(table_name):
-	# connect_to_db, select table, and save dump to csv
-	conn, curr = connect_to_db()
+def connect_to_dataset():
+	LOGGER.debug("Connecting to the database via dataset...")
 	try:
-		data = curr.execute(f"SELECT * from {table_name}").fetchall()
-		with open(os.path.join(DATAPATH, table_name + ".csv"), "w", newline='') as f:
-			writer = csv.writer(f)
-			writer.writerow(i[0] for i in curr.description)
-			writer.writerows(data)
-		LOGGER.info(f"Table {table_name} dumped to file")
+		db = dataset.connect(f"sqlite:///{os.path.join(DBPATH, 'db.sqlite3')}")
+		LOGGER.info("Successfully Connected via dataset")
 	except Exception as e:
-		LOGGER.error(f"Error while dumping table {table_name}: {e}")
+		LOGGER.error(f"Error while connecting to the database via dataset: {e}")
+		sys.exit(1)
+	return db

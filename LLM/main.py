@@ -12,9 +12,9 @@ import sys
 
 from llama_cpp import Llama
 
-from Common import load_config, load_secrets, read_file_from_cfg
-from Common.Logging import logger_init
-from Common.Database.utils import connect_to_db
+from utils import load_config, load_secrets, read_file_from_cfg
+from Logging import logger_init
+from Database import connect_to_dataset
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("LLM")
@@ -31,6 +31,26 @@ CLIENTS   = secrets["Mail"]["Clients"]
 del secrets
 
 # ================================== CLASSES ================================= #
+class BaseEmbedder:
+	def __init__(
+			self,
+			model_type,
+		):
+		self.model_type = model_type
+
+		try:
+			self.model = Llama.from_pretrained(
+				repo_id=LLMCFG[model_type]["ModelName"],
+				filename=LLMCFG[model_type]["ModelFile"],
+				embedding=True,
+				verbose=False
+			)
+			LOGGER.info(f"Initialized Embedder {model_type}")
+		except Exception as e:
+			LOGGER.error(f"Error occured while initialzing Embedder {model_type}: {e}")
+			sys.exit(1)
+
+
 class BaseChatbot:
 	def __init__(
 			self,
@@ -61,14 +81,16 @@ class BaseChatbot:
 		
 		if interface == "mail":
 			self.history = [
-				{"role": "system", "content": read_file_from_cfg(os.path.join(CFGDIR, "prompts", "mail_prompt.txt"))},
+				{"role": "system", "content": read_file_from_cfg(os.path.join("prompts", "mail_prompt.txt"))},
 			]
 			
 			# Pull Mail History from DB
-			conn, curr = connect_to_db()
-			curr.execute(f"SELECT * from emails WHERE to_addr='{client}' OR from_addr='{client}'")
+			db = connect_to_dataset()
+			email_table = db['emails']
 
-			data = curr.fetchall()
+			client_id = db['clients'].find_one()['id']
+			data = email_table.find(client_id=client_id)
+			
 			for i, row in enumerate(data):
 				content = f"Datetime: {row[8]}\nSubject: {row[6]}\nBody:\n{row[7]}\From:{row[5]}"
 				
@@ -105,8 +127,8 @@ class BaseChatbot:
 
 	def generate_response(self, input=None):
 		if self.history is None:
-			# TODO error, please init history first
-			LOGGER.error("Please initalize history first by calling self.init_history")
+			LOGGER.critical("History not initialized!")
+			return None
 		
 		try:
 			LOGGER.debug(f"Generating response from history for interface '{self.interface}'")
@@ -120,7 +142,6 @@ class BaseChatbot:
 		
 		LOGGER.debug(f"Response generated")
 		return output
-		
 
 # ================================= FUNCTIONS ================================ #
 

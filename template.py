@@ -7,7 +7,7 @@
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
-from Common.Logging import logger_init
+from Logging import logger_init
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("ModuleName")

@@ -1,6 +1,3 @@
-Docs
-Tests
-
 Configs/.env
 Configs/*.yml
 Configs/*.json
@@ -16,6 +13,8 @@ __pycache__
 .venv
 */.venv
 */*/.venv
+
+.vscode
 
 *.db
 *.sqlite3

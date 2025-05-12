@@ -10,21 +10,23 @@
 import os
 import sys
 
-from Common.Logging import logger_init
-from Common.Database import connect_to_db
+from Logging import logger_init
+from Database import connect_to_db
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("Database")
 
 # ================================= CONSTANTS ================================ #
 DBPATH = os.environ["Db"]
+CREATE_SCHEMA_PATH = os.path.join(DBPATH, "schema.sql")
+DROP_SCHEMA_PATH = os.path.join(DBPATH, "drop_db.sql")
 
 # ================================== CLASSES ================================= #
 # ================================= FUNCTIONS ================================ #
 def drop_tables(conn, curr):
 	try:
 		LOGGER.debug("Dropping previous tables, if any")
-		with open(os.path.join(DBPATH, "drop_db.sql"), "r") as fp:
+		with open(DROP_SCHEMA_PATH, "r") as fp:
 			curr.executescript(fp.read())
 		conn.commit()
 		LOGGER.info("Dropped previous tables successfully")
@@ -35,8 +37,8 @@ def drop_tables(conn, curr):
 
 def create_tables(conn, curr):
 	try:
-		LOGGER.debug("Creating new tables from create_db.sql")
-		with open(os.path.join(DBPATH, "create_db.sql"), "r") as fp:
+		LOGGER.debug("Creating new tables from schema.sql")
+		with open(CREATE_SCHEMA_PATH, "r") as fp:
 			curr.executescript(fp.read())
 		conn.commit()
 		LOGGER.info("Tables created successfully")

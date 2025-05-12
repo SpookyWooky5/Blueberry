@@ -9,6 +9,7 @@
 # ================================== IMPORTS ================================= #
 import time
 import email
+import pickle
 import imaplib
 import smtplib
 
@@ -16,12 +17,12 @@ from collections import defaultdict
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from Common import load_secrets, load_config, escape_special_chars
-from Common.Logging import logger_init
-from Common.Database import connect_to_db
-from MainNode.MailServer.auth import imap_auth, check_smtp_auth
+from utils import load_secrets, load_config, escape_special_chars
+from Logging import logger_init
+from Database import connect_to_dataset
+from MailServer import imap_auth, check_smtp_auth
+from LLM import BaseChatbot, BaseEmbedder
 
-from MainNode.LLM import BaseChatbot
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")
@@ -39,6 +40,9 @@ del secrets
 
 MAILCFG   = load_config()["MailServer"]
 
+LLM_MODEL = "Qwen3Full"
+EMB_MODEL = "NomicEmbedV2"
+
 # ================================= FUNCTIONS ================================ #
 
 def main():
@@ -48,12 +52,16 @@ def main():
 	check_smtp_auth()
 
 	# Connect to DB
-	conn, curr = connect_to_db()
+	db = connect_to_dataset()
+	email_table = db['emails']
+	email_embed_table = db['email_embeddings']
 
 	client_state_dict = defaultdict(int)
 
 	# Init LLM
-	llm = BaseChatbot("Qwen3Full")
+	llm = BaseChatbot(LLM_MODEL)
+	# Init Embedder
+	emb = BaseEmbedder(EMB_MODEL)
 
 	while True:
 		try:
@@ -140,7 +148,7 @@ def main():
 					body = raw_mail.get_payload(decode=True).decode()
 				
 				body = body.replace("=E2=80=AF", " ")
-				body = body.strip()
+				body = escape_special_chars(body.strip())
 			except Exception as e:
 				LOGGER.error(f"Error occured while decoding mail {msg_id}, {e}")
 				continue
@@ -149,32 +157,56 @@ def main():
 			# Check if mail in DB
 			try:
 				LOGGER.debug(f"Checking if mail with msg_id {msg_id} exists in table 'emails'")
-				curr.execute(
-					"SELECT * FROM emails WHERE message_id=?",
-					(msg_id,)
-				)
-				data = curr.fetchone()
+
+				data = email_table.find_one(message_id=msg_id)
 			except Exception as e:
 				LOGGER.error(f"Could not check if mail {msg_id} in table 'emails': {e}")
 			
+			# Get Client ID
+			try:
+				client_id = db['clients'].find_one(email=from_addr)['id']
+			except Exception as e:
+				LOGGER.error(f"Could not get Client ID for {from_addr}, {e}")
+				continue
+			
+			if client_id is None:
+				db['clients'].insert(dict(
+					name=from_name,
+					email=from_addr
+				))
+				client_id = db['clients'].find_one(email=from_addr)['id']
+
 			# Add mail to DB
 			if data is None:
+				db.begin()
 				try:
 					LOGGER.debug(f"Inserting mail {mail_id} into table 'emails'")
-					curr.execute(
-						'''
-						INSERT INTO emails(message_id, to_addr, to_name, from_addr,
-						from_name, subject, body) VALUES (?, ?, ?, ?, ?, ?, ?)
-						''',
-						(msg_id, to_addr, to_name,
-						from_addr, from_name, subject,
-						escape_special_chars(body))
-					)
-					conn.commit()
+
+					email_id = email_table.insert(dict(
+						client_id = client_id,
+						message_id = msg_id,
+						to_addr = to_addr,
+						to_name = to_name,
+						from_addr = from_addr,
+						from_name = from_name,
+						subject = subject,
+						body = body,
+						responded = 1
+					))
+					embedding = emb.model.create_embedding(f"Subject:{subject}\nBody:{body}")
+					email_embed_table.insert(dict(
+						email_id = email_id,
+						client_id = client_id,
+						model = EMB_MODEL,
+						embedding = pickle.dumps(embedding)
+					))
+					db.commit()
+
 					LOGGER.debug("Inserted record in table 'emails'")
 				except Exception as e:
 					LOGGER.error(f"Could not insert mail {msg_id} in table 'emails': {e}")
-					conn.rollback()
+					# conn.rollback()
+					db.rollback()
 					continue
 			else:
 				LOGGER.debug(f"Mail with msg_id {msg_id} exists in table 'emails'")
@@ -188,8 +220,6 @@ def main():
 				imap_server.select('inbox')
 			imap_server.store(str(mail_id).encode(), "+FLAGS", "\\Seen")
 
-
-
 		# Call LLM for response
 		for client in CLIENTS:
 			llm_output = None
@@ -202,22 +232,36 @@ def main():
 			# Add LLM response to DB
 			if llm_output is not None:
 				client_state_dict[client] = 0
+				llm_output = escape_special_chars(llm_output)
+				db.begin()
 				try:
 					LOGGER.debug(f"Inserting response of {msg_id} into table 'emails'")
-					curr.execute(
-						'''
-						INSERT INTO emails(message_id, to_addr, to_name, from_addr,
-						from_name, subject, body) VALUES (?, ?, ?, ?, ?, ?, ?)
-						''',
-						(response_msg_id, from_addr, from_name,
-						to_addr, to_name, subject,
-						escape_special_chars(llm_output))
-					)
-					conn.commit()
+
+					email_id = email_table.insert(dict(
+						client_id = client_id,
+						message_id = response_msg_id,
+						to_addr = from_addr,
+						to_name = from_name,
+						from_addr = to_addr,
+						from_name = to_name,
+						subject = subject,
+						body = llm_output,
+						child_of = msg_id,
+						responded = 1
+					))
+					embedding = emb.model.create_embedding(f"Subject:{subject}\nBody:{llm_output}")
+					email_embed_table.insert(dict(
+						email_id = email_id,
+						client_id = client_id,
+						model = EMB_MODEL,
+						embedding = pickle.dumps(embedding)
+					))
+					db.commit()
+
 					LOGGER.debug("Inserted record in table 'emails'")
 				except Exception as e:
 					LOGGER.error(f"Could not insert mail {msg_id} in table 'emails': {e}")
-					conn.rollback()
+					db.rollback()
 			else:
 				continue
 

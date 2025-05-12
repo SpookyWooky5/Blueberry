@@ -11,7 +11,7 @@ import os
 import json
 import yaml
 
-from Common.Logging import logger_init
+from Logging import logger_init
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("Common")
