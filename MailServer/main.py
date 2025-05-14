@@ -7,6 +7,7 @@
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
+import os
 import time
 import email
 import pickle
@@ -17,17 +18,22 @@ from collections import defaultdict
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from utils import load_secrets, load_config, escape_special_chars
+from dotenv import load_dotenv
+
 from Logging import logger_init
 from Database import connect_to_dataset
-from MailServer import imap_auth, check_smtp_auth
 from LLM import BaseChatbot, BaseEmbedder
-
+from MailServer import imap_auth, check_smtp_auth
+from Database.populate_db import get_or_create_client
+from utils import load_secrets, load_config, escape_special_chars
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")
 
 # ================================= CONSTANTS ================================ #
+CFGDIR = os.environ["Xml"]
+load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
+
 secrets   = load_secrets()
 EMAIL     = secrets["Mail"]["Zoho"]["email"]
 PASSWORD  = secrets["Mail"]["Zoho"]["password"]
@@ -40,8 +46,8 @@ del secrets
 
 MAILCFG   = load_config()["MailServer"]
 
-LLM_MODEL = "Qwen3Full"
-EMB_MODEL = "NomicEmbedV2"
+LLM_MODEL = os.getenv("LLM_MODEL")
+EMB_MODEL = os.getenv("EMB_MODEL")
 
 # ================================= FUNCTIONS ================================ #
 
@@ -163,18 +169,9 @@ def main():
 				LOGGER.error(f"Could not check if mail {msg_id} in table 'emails': {e}")
 			
 			# Get Client ID
-			try:
-				client_id = db['clients'].find_one(email=from_addr)['id']
-			except Exception as e:
-				LOGGER.error(f"Could not get Client ID for {from_addr}, {e}")
+			client_id = get_or_create_client(from_name, from_addr)
+			if client_id == -1:
 				continue
-			
-			if client_id is None:
-				db['clients'].insert(dict(
-					name=from_name,
-					email=from_addr
-				))
-				client_id = db['clients'].find_one(email=from_addr)['id']
 
 			# Add mail to DB
 			if data is None:
@@ -225,7 +222,7 @@ def main():
 			llm_output = None
 			if client_state_dict[client] != 0:
 				LOGGER.debug("Calling LLM to generate response")
-				llm.init_history("mail", client)
+				llm.init_history("mail")
 				llm_output = llm.generate_response()
 				response_msg_id = email.utils.make_msgid()
 		

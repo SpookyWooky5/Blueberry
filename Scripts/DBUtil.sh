@@ -17,7 +17,7 @@ DBFile="$Db/db.sqlite3"
 # =================================== MAIN =================================== #
 
 LogInitFnct "Database"
-# LogFnct "DEBUG" "`basename $0` initializing..."
+LogFnct "DEBUG" "`basename $0` initializing..."
 
 display_usage() {
     echo "`basename $0` Usage:"

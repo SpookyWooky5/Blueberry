@@ -3,139 +3,122 @@
 # ############################################################################ #
 # DATE         Description
 # ------------ -----------------------------------------------------------------
-# 11-MAY-2025  Initial Draft
+# 13-MAY-2025  Initial Draft
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
+import os
 import time
 import email
 import pickle
 from datetime import timedelta, datetime
 
 import numpy as np
+from dotenv import load_dotenv
 
-from utils import load_secrets, load_config, escape_special_chars
-from Logging import logger_init
-from Database import connect_to_dataset
-from MailServer import imap_auth, check_smtp_auth
 from LLM import BaseEmbedder
+from Logging import logger_init
+from MailServer import imap_auth
+from Database import connect_to_dataset
+from utils import load_secrets, escape_special_chars
+from Database.populate_db import get_or_create_client
 
 # ============================= GLOBAL VARIABLES ============================= #
-LOGGER = logger_init("Database")
+LOGGER = logger_init("MailServer")
 
 # ================================= CONSTANTS ================================ #
+CFGDIR = os.environ["Xml"]
+load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
+
 secrets   = load_secrets()
-EMAIL     = secrets["Mail"]["Zoho"]["email"]
-PASSWORD  = secrets["Mail"]["Zoho"]["password"]
 IMAP_HOST = secrets["Mail"]["Zoho"]["imap"]["host"]
-SMTP_HOST = secrets["Mail"]["Zoho"]["smtp"]["host"]
-SMTP_PORT = secrets["Mail"]["Zoho"]["smtp"]["port"]
-ADMINS    = secrets["Mail"]["Admins"]
-CLIENTS   = secrets["Mail"]["Clients"]
-CLIENTNAMES = secrets["Mail"]["ClientNames"]
 del secrets
 
-MAILCFG   = load_config()["MailServer"]
-
-EMB_MODEL = "NomicEmbedV2"
+EMB_MODEL = os.getenv("EMB_MODEL")
+# ================================== CLASSES ================================= #
 
 # ================================= FUNCTIONS ================================ #
-def get_or_create_client(client, client_name):
-	db = connect_to_dataset()
-	try:
-		client_id = db['clients'].find_one(email=client)
-	except Exception as e:
-		LOGGER.error(f"Could not get Client ID for {client}, {e}")
-		return -1
-	if client_id is None:
-		db['clients'].insert(dict(
-			name=client_name,
-			email=client
-		))
-		client_id = db['clients'].find_one(email=client)
-	client_id = client_id['id']
-	return client
-
-def populate_clients():
-	count = 0
-	db = connect_to_dataset()
-	for (name, email) in zip(CLIENTNAMES, CLIENTS):
-		db.begin()
-		try:
-			db['clients'].insert_ignore(dict(
-				name  = name,
-				email = email
-			),
-			keys=['email'])
-			db.commit()
-			count += 1
-		except Exception as e:
-			LOGGER.error(f"Could not insert client into table, {e}")
-			db.rollback()
-	LOGGER.info(f"Inserted {count} out of {len(CLIENTS)} clients")
-
-def populate_emails():
+def fetch_mails():
 	# Login to Zoho
 	imap_server = imap_auth()
-	check_smtp_auth()
+	imap_server.select('inbox')
+
+	mail_ids = None
+	try:
+		# load clients in case of any change
+		CLIENTS = load_secrets()["Mail"]["Clients"]
+		LOGGER.debug(f"Querying unseen mails from {len(CLIENTS)} client(s)")
+
+		status, _ = imap_server.noop()
+		if status != 'OK':
+			LOGGER.warning("IMAP NOOP Failed. Reconnecting...")
+			imap_server.logout()
+			imap_server = imap_auth()
+			imap_server.select('inbox')
+
+		# Select unseen mails from clients
+		all_ids = set()
+		for client in CLIENTS:
+			status, data = imap_server.search(None, 'UNSEEN', 'FROM', client)
+			if status == 'OK':
+				ids = data[0].split()
+				if ids:
+					all_ids.update(ids)
+		mail_ids = sorted(map(int, all_ids))
+
+		LOGGER.info(f"Found {len(mail_ids)} mails")
+	except Exception as e:
+		LOGGER.debug(f"Could not fetch mails: {e}")
+		return None
+
+	imap_server.logout()
+
+	return mail_ids
+
+def insert_mails_to_db(mail_ids):
+	if mail_ids is None or len(mail_ids) == 0:
+		return
+	
+	# Login to Zoho
+	imap_server = imap_auth()
+	imap_server.select('inbox')
 
 	# Connect to DB
-	# conn, curr = connect_to_db()
 	db = connect_to_dataset()
 	email_table = db['emails']
 	email_embed_table = db['email_embeddings']
-
+	
 	# Init Embedder
 	emb = BaseEmbedder(EMB_MODEL)
 
-	all_mails = []
-	for mailbox in ('inbox', 'sent'):
-		LOGGER.debug(f"Checking mails from '{mailbox}'")
-		imap_server = imap_auth()
-		imap_server.select(mailbox)
+	for mail_id in mail_ids:
+		try:
+			LOGGER.debug(f"Fetching mail {mail_id}")
 
-		for client in CLIENTS:
-			try:
-				if mailbox == 'inbox':
-					# Select mails from clients
-					status, data = imap_server.search(None, 'FROM', client)
-				else:
-					# Select mails to clients
-					status, data = imap_server.search(None, 'TO', client)
-			except Exception as e:
-				LOGGER.error(f"Could not select mails from {client}: {e}")
-				continue
-			
+			status, _ = imap_server.noop()
 			if status != 'OK':
-				LOGGER.error(f"Could not select mails from {client}: {status}")
-				continue
-		
-			mail_ids = data[0].split()
-			for mail_id in mail_ids:
-				try:
-					status, raw_mail = imap_server.fetch(mail_id, "(RFC822)")
-					raw_mail = email.message_from_bytes(raw_mail[0][1])
-					mail_date = email.utils.parsedate_to_datetime(raw_mail.get("Date"))
+				LOGGER.warning("IMAP NOOP Failed. Reconnecting...")
+				imap_server.logout()
+				imap_server = imap_auth()
+				imap_server.select('inbox')
 
-					all_mails.append((mail_date, raw_mail))
-				except Exception as e:
-					LOGGER.error(f"Could not fetch mail {mail_id} from {client}: {e}")
-					continue
-	
-	LOGGER.info(f"Found {len(all_mails)} mails")
-	all_mails.sort(key=lambda tup: tup[0])
+			_, raw_mail = imap_server.fetch(str(mail_id).encode(), "(RFC822)")
+		except Exception as e:
+			LOGGER.error(f"Could not fetch mail {mail_id} from {IMAP_HOST}: {e}")
+			continue
 
-	for (mail_date, raw_mail) in all_mails:
-		try:		
+		try:
+			raw_mail = email.message_from_bytes(raw_mail[0][1])
+			
 			subject  = raw_mail.get("Subject")
 			msg_id   = raw_mail.get("Message-ID", email.utils.make_msgid())
 			to_name  , to_addr   = email.utils.parseaddr(raw_mail.get("To"))
 			from_name, from_addr = email.utils.parseaddr(raw_mail.get("From"))
-			
+
 			# To store as UTC Time
 			date = email.utils.parsedate(raw_mail.get("Date"))
 			mail_datetime = datetime.fromtimestamp(time.mktime(date) - timedelta(hours=5, minutes=30).seconds)
-			
+		
 			body = ""
 			if raw_mail.is_multipart():
 				for part in raw_mail.walk():
@@ -152,28 +135,24 @@ def populate_emails():
 			LOGGER.error(f"Error occured while decoding mail {msg_id}, {e}")
 			continue
 
-		data = None
 		# Check if mail in DB
+		data = None
 		try:
 			LOGGER.debug(f"Checking if mail with msg_id {msg_id} exists in table 'emails'")
-
 			data = email_table.find_one(message_id=msg_id)
 		except Exception as e:
 			LOGGER.error(f"Could not check if mail {msg_id} in table 'emails': {e}")
 
 		# Get Client ID
-		try:
-			client = to_addr if from_addr == EMAIL else from_addr
-			client_id = db['clients'].find_one(email=client)['id']
-		except Exception as e:
-			LOGGER.error(f"Could not get Client ID for {client}, {e}")
+		client_id = get_or_create_client(from_addr, from_name)
+		if client_id == -1:
 			continue
 
-		# Add mail to DB
+		# Add Mail to DB
 		if data is None:
 			db.begin()
 			try:
-				LOGGER.debug(f"Inserting mail {msg_id} into table 'emails'")
+				LOGGER.debug(f"Inserting mail {mail_id} into table 'emails'")
 
 				email_id = email_table.insert(dict(
 					client_id = client_id,
@@ -185,9 +164,9 @@ def populate_emails():
 					subject = subject,
 					body = body,
 					time_received = mail_datetime,
-					responded = 1
+					responded = 0
 				))
-				embedding = emb.model.create_embedding(f"Subject:{subject}\nBody:{body}")['data'][0]['embedding']
+				embedding = emb.embed(subject, body)
 				embedding = np.array(embedding)
 				email_embed_table.insert(dict(
 					email_id = email_id,
@@ -204,8 +183,16 @@ def populate_emails():
 				continue
 		else:
 			LOGGER.debug(f"Mail with msg_id {msg_id} exists in table 'emails'")
-
+		
+		# Mark mail as SEEN
+		status, _ = imap_server.noop()
+		if status != 'OK':
+			LOGGER.warning("IMAP NOOP Failed. Reconnecting...")
+			imap_server.logout()
+			imap_server = imap_auth()
+			imap_server.select('inbox')
+		imap_server.store(str(mail_id).encode(), "+FLAGS", "\\Seen")
+	
 # =================================== MAIN =================================== #
 if __name__ == "__main__":
-	populate_clients()
-	populate_emails()
+	insert_mails_to_db(fetch_mails())

@@ -10,17 +10,21 @@
 import os
 import sys
 
+import numpy as np
 from llama_cpp import Llama
+from dotenv import load_dotenv
 
-from utils import load_config, load_secrets, read_file_from_cfg
+from LLM import remove_commands
 from Logging import logger_init
 from Database import connect_to_dataset
+from utils import load_config, load_secrets, read_file_from_cfg
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("LLM")
 
 # ================================= CONSTANTS ================================ #
 CFGDIR = os.environ["Xml"]
+load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
 
 LLMCFG = load_config()["LLM"]
 
@@ -49,7 +53,11 @@ class BaseEmbedder:
 		except Exception as e:
 			LOGGER.error(f"Error occured while initialzing Embedder {model_type}: {e}")
 			sys.exit(1)
-
+	
+	def embed(self, subject, body):
+		return np.array(
+			self.model.create_embedding(f"Subject:{subject}\nBody:{remove_commands(body)}")['data'][0]['embedding']
+		)
 
 class BaseChatbot:
 	def __init__(
@@ -75,9 +83,13 @@ class BaseChatbot:
 		self.history = None
 		self.interface = None
 	
-	def init_history(self, interface=None, client=None):
+	def init_history(self, interface=None, history=None):
 		LOGGER.debug(f"Initializing history for interface '{interface}'")
+
 		self.interface = interface
+		if history is not None:
+			self.history = history
+			return
 		
 		if interface == "mail":
 			self.history = [
@@ -89,7 +101,7 @@ class BaseChatbot:
 			email_table = db['emails']
 
 			client_id = db['clients'].find_one()['id']
-			data = email_table.find(client_id=client_id)
+			data = email_table.find(client_id=client_id)[-int(os.getenv("NUM_MAILS_TO_REFER")):]
 			
 			for i, row in enumerate(data):
 				content = f"Datetime: {row[8]}\nSubject: {row[6]}\nBody:\n{row[7]}\From:{row[5]}"
@@ -106,10 +118,10 @@ class BaseChatbot:
 					self.history.append(
 						{"role": "assistant", "content": row[7]}
 					)
-				elif "/sudo" in content and row[2] in ADMINS:
-					self.history.append(
-						{"role": "administrator", "content": row[7]}
-					)
+				# elif "/sudo" in content and row[2] in ADMINS:
+				# 	self.history.append(
+				# 		{"role": "administrator", "content": row[7]}
+				# 	)
 				else:
 					self.history.append(
 						{"role": "user", "content": content}

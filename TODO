@@ -1,10 +1,5 @@
-- make use of embeddings
 - Create daily, weekly, and monthly summaries/memories and add them to the db
-- Use summaries instead of all past mails to generate a response
-- create a command like /remember 2 weeks to retrieve memories of past 2 weeks as context
 - fix reply mail threading
-- check log levels of all statements
 - Add Obsidian Integration
 - Add Parent mail checking functionality and check child of
-- /sudo, and other tools
-- MCP
+- MCP?

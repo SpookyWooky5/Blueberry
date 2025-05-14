@@ -1,0 +1,23 @@
+# At every 15th minute
+# For periodic mail checking
+*/15 * * * *
+
+# At minute 2 past every 2nd hour
+# For periodic mail response
+2 */2 * * *
+
+# At 08:01
+# For daily summary
+1 8 * * *
+
+# At 23:01 on Sunday
+# For weekly summary
+1 23 * * 0
+
+# At 00:01 on day-of-month 1
+# For monthly summary
+1 0 1 * *
+
+# At 01:01 on day-of-month 1 in every 3rd month
+# For quarterly summary
+1 1 1 */3 *
