@@ -6,9 +6,9 @@
 # For periodic mail response
 2 */2 * * *
 
-# At 08:01
+# At 07:01
 # For daily summary
-1 8 * * *
+1 7 * * *
 
 # At 23:01 on Sunday
 # For weekly summary

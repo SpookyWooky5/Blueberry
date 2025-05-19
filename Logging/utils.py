@@ -44,7 +44,8 @@ def load_config():
     return data
 
 def logger_init(PROCESS):
-    level = LEVELS[load_config()[PROCESS]["LogLevel"]]
+    # level = LEVELS[load_config()[PROCESS]["LogLevel"]]
+    level = load_config().get(PROCESS, {"LogLevel": "DEBUG"})["LogLevel"]
     log_file_path = os.path.join(LOGDIR, PROCESS + ".log")
 
     logger = logging.getLogger(PROCESS)

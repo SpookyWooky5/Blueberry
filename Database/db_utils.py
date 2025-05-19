@@ -44,3 +44,19 @@ def connect_to_dataset():
 		LOGGER.error(f"Error while connecting to the database via dataset: {e}")
 		sys.exit(1)
 	return db
+
+def get_or_create_client(client, client_name):
+	db = connect_to_dataset()
+	try:
+		client_id = db['clients'].find_one(email=client)
+	except Exception as e:
+		LOGGER.error(f"Could not get Client ID for {client}, {e}")
+		return -1
+	if client_id is None:
+		db['clients'].insert(dict(
+			name=client_name,
+			email=client
+		))
+		client_id = db['clients'].find_one(email=client)
+	client_id = client_id['id']
+	return client_id

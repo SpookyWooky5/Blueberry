@@ -14,8 +14,8 @@ import numpy as np
 from llama_cpp import Llama
 from dotenv import load_dotenv
 
-from LLM import remove_commands
 from Logging import logger_init
+from LLM.parse import remove_commands
 from Database import connect_to_dataset
 from utils import load_config, load_secrets, read_file_from_cfg
 

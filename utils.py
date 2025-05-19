@@ -8,6 +8,7 @@
 
 # ================================== IMPORTS ================================= #
 import os
+import re
 import json
 import yaml
 
@@ -30,12 +31,12 @@ def load_secrets(filename="secrets.yml"):
 	return data
 
 def load_config():
-    with open(os.path.join(CFGDIR, "process.json"), "r") as fp:
-        try:
-            data = json.load(fp)
-        except Exception as e:
-            print(e)
-    return data
+	with open(os.path.join(CFGDIR, "process.json"), "r") as fp:
+		try:
+			data = json.load(fp)
+		except Exception as e:
+			print(e)
+	return data
 
 def read_file_from_cfg(filepath):
 	# filename = filename.strip().lower().replace("_", "").replace(" ", "").split(".")[0]
@@ -47,10 +48,17 @@ def read_file_from_cfg(filepath):
 		LOGGER.error(f"Unable to open {filepath}, {e}")
 
 def escape_special_chars(s):
-	return (
-        s.replace('\\', '\\\\')    # first escape any existing backslashes
-         .replace('\n', '\\n')
-         .replace('\r', '\\r')
-         .replace('\t', '\\t')
-         .replace('"',  '""')      # if you ever dump as CSV later
-    )
+	s = re.sub(r'(\r\n|\r|\n)+', '\n', s)
+	def replacer(match):
+		ch = match.group(0)
+		return {
+			'\\': '\\\\',
+			'\n': '\\n',
+			'\r': '\\r',
+			'\t': '\\t',
+			'"': '""'
+		}[ch]
+	return re.sub(r'[\\\n\r\t"]', replacer, s)
+
+def remove_think_blocks(s):
+	return re.sub(r'<think>.*?</think>', '', s, flags=re.DOTALL)

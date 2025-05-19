@@ -1,4 +1,3 @@
-- Create daily, weekly, and monthly summaries/memories and add them to the db
 - fix reply mail threading
 - Add Obsidian Integration
 - Add Parent mail checking functionality and check child of

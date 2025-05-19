@@ -20,8 +20,9 @@ from dotenv import load_dotenv
 
 from Logging import logger_init
 from Database import connect_to_dataset
+from LLM.parse import parse, remove_commands
+from LLM import BaseChatbot, BaseEmbedder, cosine
 from Database.populate_db import get_or_create_client
-from LLM import BaseChatbot, BaseEmbedder, cosine, parse, remove_commands
 from utils import load_config, load_secrets, read_file_from_cfg, escape_special_chars
 
 # ============================= GLOBAL VARIABLES ============================= #
@@ -115,7 +116,7 @@ def get_history(unresponded):
 				LOGGER.error(f"Could not find today's mails, {e}")
 			
 			for i, row in enumerate(data):
-				content = f'Datetime: {row["time_received"]}\nSubject: {row["subject"]}\nBody:\n{row["body"]}\From: {row["from_name"]}'
+				content = f'Datetime: {row["time_received"]}\nSubject: {row["subject"]}\nBody:\n{row["body"]}\nFrom: {row["from_name"]}'
 				# Only think if latest mail has think
 				if i + 1 != len(data):
 					content.replace("/think", "")

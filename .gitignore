@@ -16,8 +16,8 @@ __pycache__
 
 .vscode
 
-*.db
-*.sqlite3
+*.db*
+*.sqlite3*
 .python*
 *uv*
 *tmp*
