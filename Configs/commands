@@ -9,7 +9,7 @@
 
 /embeds
 - to forego use of embeddings to search for similar topics from past memories
-- using /nocosine and /remember[] will be like starting a new chat with only system prompt in context
+- using /embeds and /remember[] will be like starting a new chat with only system prompt in context
 
 /readobs
 - to make use of documents from obsidian vault as context

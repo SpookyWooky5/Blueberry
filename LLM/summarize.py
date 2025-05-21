@@ -394,10 +394,12 @@ def old_summ(summary_type, start_date, llm, emb, respond = True):
 
 # =================================== MAIN =================================== #
 if __name__ == "__main__":
+	summary_type = sys.argv[1]
+
 	# Init LLM
 	llm = BaseChatbot(LLM_MODEL)
 	# Init Embedder
 	emb = BaseEmbedder(EMB_MODEL)
 
 	today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-	summarize(sys.argv[1], today, llm, emb, True)
+	summarize(summary_type, today, llm, emb, True)

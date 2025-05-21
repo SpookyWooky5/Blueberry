@@ -19,10 +19,9 @@ import numpy as np
 from dotenv import load_dotenv
 
 from Logging import logger_init
-from Database import connect_to_dataset
 from LLM.parse import parse, remove_commands
 from LLM import BaseChatbot, BaseEmbedder, cosine
-from Database.populate_db import get_or_create_client
+from Database import connect_to_dataset, get_or_create_client
 from utils import load_config, load_secrets, read_file_from_cfg, escape_special_chars
 
 # ============================= GLOBAL VARIABLES ============================= #

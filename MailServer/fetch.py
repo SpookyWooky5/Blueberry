@@ -19,9 +19,8 @@ from dotenv import load_dotenv
 from LLM import BaseEmbedder
 from Logging import logger_init
 from MailServer import imap_auth
-from Database import connect_to_dataset
 from utils import load_secrets, escape_special_chars
-from Database.populate_db import get_or_create_client
+from Database import connect_to_dataset, get_or_create_client
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")
