@@ -73,6 +73,12 @@ def get_history(unresponded):
 	context_config = parse(unresponded_body)
 	unresponded_body = remove_commands(unresponded_body)
 
+	unresponded_body.replace("/think", "")
+	if "/think" in unresponded[-1]["body"]:
+		unresponded_body += "\n/think"
+	else:
+		unresponded_body += "\n/nothink"
+
 	if context_config["remember"]["enable"]:
 		content = temp = 'Refer to below summaries of the user\'s past interactions to generate an appropriate response:\n'
 		
@@ -116,11 +122,9 @@ def get_history(unresponded):
 			
 			for i, row in enumerate(data):
 				content = f'Datetime: {row["time_received"]}\nSubject: {row["subject"]}\nBody:\n{row["body"]}\nFrom: {row["from_name"]}'
-				# Only think if latest mail has think
-				if i + 1 != len(data):
-					content.replace("/think", "")
 				
 				# Dont think by default
+				content.replace("/think", "")
 				if "/think" not in content:
 					content += "\n/nothink"
 				
@@ -219,7 +223,7 @@ def reply():
 		llm_output = llm.generate_response()
 		if llm_output is None:
 			continue
-		llm_output = escape_special_chars(llm_output)
+		# llm_output = escape_special_chars(llm_output)
 		response_msg_id = email.utils.make_msgid()
 
 		last_mail = unresponded[-1]

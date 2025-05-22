@@ -23,6 +23,7 @@ Each summary should include:
 
 **Format**:
 - Start the summary with a short, warm greeting to the client using their name. For example, “Hi {client_name}”
+- After greeting the user, start with a line like "Here is your {summary_type} summary for the day/week/month"
 - Address the user directly. Even though this is addressed to the client, ensure that the summary can be easily rewritten in third person for future compilation.
 - Avoid speculation and emotional overreach. Do not invent emotional states if they are not clearly expressed in the user's language.
 - Keep the tone warm and supportive, but grounded and realistic. Avoid exaggerated positivity or sales-like language.

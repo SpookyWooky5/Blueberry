@@ -146,7 +146,8 @@ Body:
 		llm_output = llm.generate_response()
 		if llm_output is None:
 			continue
-		llm_output = escape_special_chars(llm_output)
+		# llm_output = escape_special_chars(llm_output)
+		llm_output = remove_think_blocks(llm_output)
 
 		# Add summary to Memory DB
 		db.begin()
