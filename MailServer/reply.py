@@ -87,16 +87,20 @@ def get_history(unresponded):
 			if not v:
 				continue
 			try:
-				data = memory_table.find(
+				data = tuple(memory_table.find(
 					client_id = client_id,
 					memory_type = k,
 					order_by  = '-id',
 					_limit = v
-				)
+				))
 				LOGGER.debug(f"Found {len(data)} {k} memories")
 				
 				for row in data:
-					content += f'\n{row["memory_type"]} summary from {row["period_start"]} to {row["period_start"]}\n{row["text"]}'
+					content += f'\n{row["memory_type"]} summary from {row["period_start"]} to {row["period_end"]}'
+					content += '\n--- BEGIN SUMMARY ---'
+					content += f'\n{row["text"]}'
+					content += '\n--- END SUMMARY ---'
+
 			except Exception as e:
 				LOGGER.error(f"Could not find {k} memories, {e}")
 				continue
@@ -128,7 +132,7 @@ def get_history(unresponded):
 				if "/think" not in content:
 					content += "\n/nothink"
 				
-				if row[2] != EMAIL:
+				if row["to_addr"] != EMAIL:
 					history.append(
 						{"role": "assistant", "content": content}
 					)
@@ -154,7 +158,7 @@ def get_history(unresponded):
 			mem_embds = memory_embed_table.find(client_id=client_id)
 
 			LOGGER.debug("Computing cosine similarites")
-			eml_sims = [(me["memory_id"], 'email', cosine(query_emb, pickle.loads(me["embedding"]))) for me in eml_embds]
+			eml_sims = [(me["email_id"], 'email', cosine(query_emb, pickle.loads(me["embedding"]))) for me in eml_embds]
 			mem_sims = eml_sims.extend([(me["memory_id"], 'memory', cosine(query_emb, pickle.loads(me["embedding"]))) for me in mem_embds])
 			top_sim_ids = [(meid, metype) for (meid, metype, _) in sorted(mem_sims, key=lambda x:-x[2])[:context_config["embeds"]["topk"]]]
 

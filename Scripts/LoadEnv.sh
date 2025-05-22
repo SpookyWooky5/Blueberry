@@ -32,6 +32,5 @@ source "$VENV_PATH/bin/activate"
 {
   echo -e "\n--- $(date '+%Y-%m-%d %H:%M:%S') ---"
   echo "Running: python $*"
-  echo "PYTHONPATH: $PYTHONPATH"
   python "$@"
 } >> "$LOG_FILE" 2>&1

@@ -1,4 +1,5 @@
 - netliveprofile and crontab file ?
+- increase swap to 8 gb
 - fix reply mail threading
 - Add Obsidian Integration
 - Add Parent mail checking functionality and check child of
