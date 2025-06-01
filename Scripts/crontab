@@ -2,9 +2,9 @@
 # For periodic mail checking
 */15 * * * * /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/fetch.py
 
-# At minute 2 past every hour
+# At minutes 2 and 32 every hour
 # For periodic mail response
-2 * * * * /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/reply.py
+2,32 * * * * /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/reply.py
 
 # At 07:01
 # For daily summary

@@ -1,6 +1,4 @@
-Configs/.env
-Configs/*.yml
-Configs/*.json
+Configs/
 
 Data/*
 

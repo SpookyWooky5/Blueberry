@@ -22,7 +22,7 @@ from Logging import logger_init
 from LLM.parse import parse, remove_commands
 from LLM import BaseChatbot, BaseEmbedder, cosine
 from Database import connect_to_dataset, get_or_create_client
-from utils import load_config, load_secrets, read_file_from_cfg, escape_special_chars
+from utils import load_config, load_secrets, read_file_from_cfg, remove_think_blocks
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")
@@ -71,7 +71,7 @@ def get_history(unresponded):
 
 	unresponded_body = "\n\n".join(mail['body'] for mail in unresponded)
 	context_config = parse(unresponded_body)
-	unresponded_body = remove_commands(unresponded_body)
+	unresponded_body = remove_commands(remove_think_blocks(unresponded_body))
 
 	unresponded_body.replace("/think", "")
 	if "/think" in unresponded[-1]["body"]:
@@ -227,7 +227,7 @@ def reply():
 		llm_output = llm.generate_response()
 		if llm_output is None:
 			continue
-		# llm_output = escape_special_chars(llm_output)
+
 		response_msg_id = email.utils.make_msgid()
 
 		last_mail = unresponded[-1]

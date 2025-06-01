@@ -1,3 +1,4 @@
+- Could not compute cosine similarities, 'NoneType' object is not iterable
 - netliveprofile and crontab file ?
 - increase swap to 8 gb
 - fix reply mail threading

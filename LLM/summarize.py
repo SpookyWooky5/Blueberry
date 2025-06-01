@@ -87,9 +87,11 @@ def summarize(summary_type, start_date, llm, emb, respond=True):
 		}
 
 	if summary_type != "daily":
+		today = period_end
 		subject = f'{summary_type.capitalize()} Summary from {period_start.strftime("%a, %d %B")} to {period_end.strftime("%a, %d %B")}'
 	else:
-		subject = f'{summary_type.capitalize()} Summary {period_end.strftime("%a, %d %B")}'
+		today = period_start
+		subject = f'{summary_type.capitalize()} Summary {period_start.strftime("%a, %d %B")}'
 
 	for client, client_name in zip(CLIENTS, CLIENTNAMES):
 		client_id = get_or_create_client(client, client_name)
@@ -128,7 +130,7 @@ Body:
 		prompt = escape_special_chars(read_file_from_cfg(os.path.join("prompts", "summary_prompt.txt")))
 		prompt = prompt.format(
 			client_name = client_name,
-			today = period_end.strftime("%a, %d %B"),
+			today = today.strftime("%a, %d %B"),
 			summary_type = summary_type,
 			header = cfg["header"].format(
 				client_name = client_name
