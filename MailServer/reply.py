@@ -158,20 +158,20 @@ def get_history(unresponded):
 			mem_embds = memory_embed_table.find(client_id=client_id)
 
 			LOGGER.debug("Computing cosine similarites")
-			eml_sims = [(me["email_id"], 'email', cosine(query_emb, pickle.loads(me["embedding"]))) for me in eml_embds]
-			mem_sims = eml_sims.extend([(me["memory_id"], 'memory', cosine(query_emb, pickle.loads(me["embedding"]))) for me in mem_embds])
-			top_sim_ids = [(meid, metype) for (meid, metype, _) in sorted(mem_sims, key=lambda x:-x[2])[:context_config["embeds"]["topk"]]]
+			all_sims = [(me["email_id"], 'email', cosine(query_emb, pickle.loads(me["embedding"]))) for me in eml_embds]
+			all_sims.extend([(me["memory_id"], 'memory', cosine(query_emb, pickle.loads(me["embedding"]))) for me in mem_embds])
+			top_sim_ids = [(meid, metype) for (meid, metype, _) in sorted(all_sims, key=lambda x:-x[2])[:context_config["embeds"]["topk"]]]
 
 			relevant_mails = email_table.find(
 				client_id = client_id,
-				id = [meid for (meid, metype, _) in top_sim_ids if metype == 'email']
+				id = [meid for (meid, metype) in top_sim_ids if metype == 'email']
 			)
 			for mail in relevant_mails:
 				content += f'Mail:\nSubject: {mail["subject"]}\nBody: {mail["body"]}\n'
 			
 			relevant_memories = memory_table.find(
 				client_id = client_id,
-				id = [meid for (meid, metype, _) in top_sim_ids if metype == 'memory']
+				id = [meid for (meid, metype) in top_sim_ids if metype == 'memory']
 			)
 			for memo in relevant_memories:
 				content += f'Memory from {memo["created_at"]}: {memo["text"]}\n'

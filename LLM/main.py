@@ -46,6 +46,7 @@ class BaseEmbedder:
 			self.model = Llama.from_pretrained(
 				repo_id=LLMCFG[model_type]["ModelName"],
 				filename=LLMCFG[model_type]["ModelFile"],
+				local_dir=os.path.join(os.environ["Dev"], "LLM", "models"),
 				embedding=True,
 				verbose=False
 			)

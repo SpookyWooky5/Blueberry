@@ -1,7 +1,5 @@
-- Could not compute cosine similarities, 'NoneType' object is not iterable
-- netliveprofile and crontab file ?
-- increase swap to 8 gb
-- fix reply mail threading
 - Add Obsidian Integration
+- netliveprofile and crontab file ?
+- fix reply mail threading
 - Add Parent mail checking functionality and check child of
 - MCP?
