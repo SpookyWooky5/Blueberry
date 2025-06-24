@@ -69,12 +69,12 @@ def get_history(unresponded):
 		{"role": "system", "content": read_file_from_cfg(os.path.join("prompts", "mail_prompt.txt"))},
 	]
 
-	unresponded_body = "\n\n".join(mail['body'] for mail in unresponded)
+	unresponded_body = "\n\n".join(remove_think_blocks(mail['body']) for mail in unresponded)
 	context_config = parse(unresponded_body)
 	unresponded_body = remove_commands(remove_think_blocks(unresponded_body))
 
 	unresponded_body.replace("/think", "")
-	if "/think" in unresponded[-1]["body"]:
+	if "/think" in remove_think_blocks(unresponded[-1]["body"]):
 		unresponded_body += "\n/think"
 	else:
 		unresponded_body += "\n/nothink"

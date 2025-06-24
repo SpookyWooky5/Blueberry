@@ -49,7 +49,7 @@ COMMAND_RE_PATTERN = r'\/.+\[.*\]'
 
 # ================================= FUNCTIONS ================================ #
 def remove_commands(body):
-	return re.sub(COMMAND_RE_PATTERN, "", body)
+	return re.sub(COMMAND_RE_PATTERN, "", body).strip()
 
 def parse(body):
 	LOGGER.debug("Parsing mail body(s) for commands")

@@ -61,4 +61,4 @@ def escape_special_chars(s):
 	return re.sub(r'[\\\n\r\t"]', replacer, s)
 
 def remove_think_blocks(s):
-	return re.sub(r'<think>[\s\S]*?<\/think>', '', s, flags=re.DOTALL)
+	return re.sub(r'<think>[\s\S]*?<\/think>', '', s, flags=re.DOTALL).strip()
