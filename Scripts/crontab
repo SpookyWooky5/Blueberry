@@ -1,23 +1,23 @@
 # At every 15th minute
 # For periodic mail checking
-*/15 * * * * /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/fetch.py
+*/15 * * * * /usr/bin/flock -n /tmp/blueberry.fetch.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/fetch.py"
 
 # At minutes 2 and 32 every hour
 # For periodic mail response
-2,32 * * * * /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/reply.py
+2,32 * * * * /usr/bin/flock -n /tmp/blueberry.reply.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/reply.py"
 
 # At 07:01
 # For daily summary
-1 7 * * * /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py daily
+1 7 * * * /usr/bin/flock -n /tmp/blueberry.summarize.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py daily"
 
 # At 23:01 on Sunday
 # For weekly summary
-1 23 * * 0 /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py weekly
+1 23 * * 0 /usr/bin/flock -n /tmp/blueberry.summarize.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py weekly"
 
 # At 00:01 on day-of-month 1
 # For monthly summary
-1 0 1 * * /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py monthly
+1 0 1 * * /usr/bin/flock -n /tmp/blueberry.summarize.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py monthly"
 
 # At 01:01 on day-of-month 1 in every 3rd month
 # For quarterly summary
-1 1 1 */3 * /home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py quarterly
+1 1 1 */3 * /usr/bin/flock -n /tmp/blueberry.summarize.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py quarterly"
