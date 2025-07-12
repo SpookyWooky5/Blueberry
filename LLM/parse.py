@@ -10,16 +10,13 @@
 import os
 import re
 
-from dotenv import load_dotenv
-
 from Logging import logger_init
+from utils import CFGDIR
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("LLM")
 
 # ================================= CONSTANTS ================================ #
-CFGDIR = os.environ["Xml"]
-load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
 
 DEFAULT_CONTEXT_CONFIG = {
 	# /remember[TE,2D,1W,1M,1Q]

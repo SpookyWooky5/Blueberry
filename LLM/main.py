@@ -4,6 +4,7 @@
 # DATE         Description
 # ------------ -----------------------------------------------------------------
 # 23-MAR-2025  Initial Draft
+# 12-JUL-2025  Refactor to use shared constants from utils
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
@@ -12,27 +13,24 @@ import sys
 
 import numpy as np
 from llama_cpp import Llama
-from dotenv import load_dotenv
 
 from Logging import logger_init
 from LLM.parse import remove_commands
 from Database import connect_to_dataset
-from utils import load_config, load_secrets, read_file_from_cfg
+from utils import (
+    load_config,
+    read_prompt_from_file,
+    PROMPTS_DIR,
+    LLM_MODEL,
+    EMB_MODEL,
+    EMAIL,
+)
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("LLM")
 
 # ================================= CONSTANTS ================================ #
-CFGDIR = os.environ["Xml"]
-load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
-
 LLMCFG = load_config()["LLM"]
-
-secrets   = load_secrets()
-EMAIL     = secrets["Mail"]["Zoho"]["email"]
-ADMINS    = secrets["Mail"]["Admins"]
-CLIENTS   = secrets["Mail"]["Clients"]
-del secrets
 
 # ================================== CLASSES ================================= #
 class BaseEmbedder:
@@ -93,40 +91,11 @@ class BaseChatbot:
 			return
 		
 		if interface == "mail":
+			# This path is now primarily handled by MailServer/reply.py, 
+			# which constructs the full context. This is a fallback.
 			self.history = [
-				{"role": "system", "content": read_file_from_cfg(os.path.join("prompts", "mail_prompt.txt"))},
+				{"role": "system", "content": read_prompt_from_file("mail_prompt.txt")},
 			]
-			
-			# Pull Mail History from DB
-			db = connect_to_dataset()
-			email_table = db['emails']
-
-			client_id = db['clients'].find_one()['id']
-			data = email_table.find(client_id=client_id)[-int(os.getenv("NUM_MAILS_TO_REFER")):]
-			
-			for i, row in enumerate(data):
-				content = f"Datetime: {row[8]}\nSubject: {row[6]}\nBody:\n{row[7]}\From:{row[5]}"
-				
-				# Only think if latest mail has think
-				if i + 1 != len(data):
-					content.replace("/think", "")
-				
-				# Dont think be default
-				if "/think" not in content:
-					content += "\n/nothink"
-				
-				if row[2] != EMAIL:
-					self.history.append(
-						{"role": "assistant", "content": row[7]}
-					)
-				# elif "/sudo" in content and row[2] in ADMINS:
-				# 	self.history.append(
-				# 		{"role": "administrator", "content": row[7]}
-				# 	)
-				else:
-					self.history.append(
-						{"role": "user", "content": content}
-					)
 		
 		elif interface in (None, "chat"):
 			self.history = [
@@ -160,4 +129,4 @@ class BaseChatbot:
 
 # =================================== MAIN =================================== #
 if __name__ == "__main__":
-	llm = BaseChatbot()
+	llm = BaseChatbot(LLM_MODEL)

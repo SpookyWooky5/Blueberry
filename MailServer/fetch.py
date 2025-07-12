@@ -4,6 +4,7 @@
 # DATE         Description
 # ------------ -----------------------------------------------------------------
 # 13-MAY-2025  Initial Draft
+# 12-JUL-2025  Refactor to use shared constants from utils
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
@@ -14,26 +15,24 @@ import pickle
 from datetime import timedelta, datetime
 
 import numpy as np
-from dotenv import load_dotenv
 
 from LLM import BaseEmbedder
 from Logging import logger_init
 from MailServer import imap_auth
-from utils import load_secrets, escape_special_chars
 from Database import connect_to_dataset, get_or_create_client
+from utils import (
+    load_secrets,
+    escape_special_chars,
+    EMB_MODEL,
+    CLIENTS,
+)
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")
 
 # ================================= CONSTANTS ================================ #
-CFGDIR = os.environ["Xml"]
-load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
+IMAP_HOST = load_secrets()["Mail"]["Zoho"]["imap"]["host"]
 
-secrets   = load_secrets()
-IMAP_HOST = secrets["Mail"]["Zoho"]["imap"]["host"]
-del secrets
-
-EMB_MODEL = os.getenv("EMB_MODEL")
 # ================================== CLASSES ================================= #
 
 # ================================= FUNCTIONS ================================ #
@@ -45,8 +44,8 @@ def fetch_mails():
 	mail_ids = None
 	try:
 		# load clients in case of any change
-		CLIENTS = load_secrets()["Mail"]["Clients"]
-		LOGGER.debug(f"Querying unseen mails from {len(CLIENTS)} client(s)")
+		current_clients = load_secrets()["Mail"]["Clients"]
+		LOGGER.debug(f"Querying unseen mails from {len(current_clients)} client(s)")
 
 		status, _ = imap_server.noop()
 		if status != 'OK':
@@ -57,7 +56,7 @@ def fetch_mails():
 
 		# Select unseen mails from clients
 		all_ids = set()
-		for client in CLIENTS:
+		for client in current_clients:
 			status, data = imap_server.search(None, 'UNSEEN', 'FROM', client)
 			if status == 'OK':
 				ids = data[0].split()
