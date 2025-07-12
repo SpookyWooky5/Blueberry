@@ -18,7 +18,7 @@ from email.mime.multipart import MIMEMultipart
 import numpy as np
 
 from Logging import logger_init
-from LLM.parse import remove_commands
+from LLM.parse import parse, remove_commands
 from LLM import BaseChatbot, BaseEmbedder, cosine
 from Database import connect_to_dataset, get_or_create_client
 from utils import (
@@ -40,41 +40,56 @@ LOGGER = logger_init("MailServer")
 # ================================== CLASSES ================================= #
 
 # ================================= FUNCTIONS ================================ #
-def get_relevant_context(db, emb, client_id, current_email_text, top_k=3):
-    """Retrieves relevant past memories based on the current email's content."""
-    if not current_email_text:
-        return ""
+def get_context_from_config(db, emb, client_id, current_email_text, config):
+    """Builds the context string based on the parsed command configuration."""
+    context_parts = []
 
-    LOGGER.debug("Finding relevant past memories for context...")
-    try:
-        current_embedding = emb.embed("Current Email", current_email_text)
-        past_memories = list(db['memory_embeddings'].find(client_id=client_id))
-        if not past_memories:
-            return ""
+    # 1. Handle time-based memories from /remember command
+    if config.get("remember", {}).get("enable"):
+        LOGGER.info("Retrieving recent memories based on time filters.")
+        memory_table = db['memories']
+        for period, limit in config["remember"]["time_filters"].items():
+            if not limit:
+                continue
+            try:
+                records = tuple(memory_table.find(
+                    client_id=client_id,
+                    memory_type=period,
+                    order_by='-id',
+                    _limit=limit
+                ))
+                for row in records:
+                    context_parts.append(f"[{row['memory_type'].upper()} SUMMARY from {row['period_start']}]\n{row['text']}\n")
+            except Exception as e:
+                LOGGER.error(f"Could not find {period} memories: {e}")
 
-        similarities = []
-        for mem in past_memories:
-            past_embedding = pickle.loads(mem['embedding'])
-            sim = cosine(np.array(current_embedding), np.array(past_embedding))
-            similarities.append((sim, mem['memory_id']))
-
-        similarities.sort(key=lambda x: x[0], reverse=True)
-        top_memory_ids = [mem_id for sim, mem_id in similarities[:top_k]]
-
-        if not top_memory_ids:
-            return ""
-
-        relevant_memories = list(db['memories'].find(id=top_memory_ids))
+    # 2. Handle similarity-based memories from /embeds command
+    if config.get("embeds", {}).get("enable"):
+        LOGGER.info("Retrieving relevant memories based on similarity.")
+        top_k = config["embeds"].get("topk", 3)
         
-        context_list = []
-        for mem in relevant_memories:
-            context_list.append(f"[PAST MEMORY from {mem['period_start'].strftime('%Y-%m-%d')}]\n{mem['text']}\n[/PAST MEMORY]")
-        
-        return "\n\n".join(context_list)
+        try:
+            current_embedding = emb.embed("Current Email", current_email_text)
+            past_memories = list(db['memory_embeddings'].find(client_id=client_id))
+            if past_memories:
+                similarities = []
+                for mem in past_memories:
+                    past_embedding = pickle.loads(mem['embedding'])
+                    sim = cosine(np.array(current_embedding), np.array(past_embedding))
+                    similarities.append((sim, mem['memory_id']))
 
-    except Exception as e:
-        LOGGER.error(f"Could not retrieve relevant context: {e}")
-        return ""
+                similarities.sort(key=lambda x: x[0], reverse=True)
+                top_memory_ids = [mem_id for sim, mem_id in similarities[:top_k]]
+
+                if top_memory_ids:
+                    relevant_memories = list(db['memories'].find(id=top_memory_ids))
+                    for mem in relevant_memories:
+                        context_parts.append(f"[PAST MEMORY from {mem['period_start'].strftime('%Y-%m-%d')}]\n{mem['text']}\n[/PAST MEMORY]")
+        except Exception as e:
+            LOGGER.error(f"Could not retrieve relevant context by similarity: {e}")
+
+    return "\n\n".join(context_parts)
+
 
 def reply():
 	# Connect to DB
@@ -92,7 +107,6 @@ def reply():
 		if client_id == -1:
 			continue
 		
-		# Get unreplied emails from DB
 		try:
 			LOGGER.debug(f"Retrieving unreplied mails from DB for client {client_id}")
 			unresponded = tuple(email_table.find(
@@ -105,30 +119,34 @@ def reply():
 			continue
 		
 		if not unresponded:
-			LOGGER.info(f"No unreplied mails for client {client_id}")
 			continue
 		
 		LOGGER.info(f"Found {len(unresponded)} unreplied mails from client {client_id}")
 
-		# Consolidate all unread messages into one block
-		current_email_text = "\n\n---\n\n".join(
-			f"From: {mail['from_name']}\nSubject: {mail['subject']}\n\n{remove_commands(mail['body'])}"
-			for mail in unresponded
-		)
+		# --- Restore Command Parsing and /nothink logic ---
+		raw_email_body = "\n\n---\n\n".join(mail['body'] for mail in unresponded)
+		context_config = parse(unresponded[-1]['body'])
+		
+		# Clean the body for the LLM and add the think/nothink directive
+		cleaned_email_text = remove_commands(raw_email_body)
+		cleaned_email_text = remove_think_blocks(cleaned_email_text)
+		cleaned_email_text.replace("/think", "")
+		if "/think" in remove_think_blocks(unresponded[-1]['body']):
+			cleaned_email_text += "\n/think"
+		else:
+			cleaned_email_text += "\n/nothink"
 
-		# Get relevant context from past memories
-		context = get_relevant_context(db, emb, client_id, current_email_text)
+		# Build context based on parsed commands
+		context = get_context_from_config(db, emb, client_id, cleaned_email_text, context_config)
 
-		# Load the prompt
 		prompt_template = read_prompt_from_file("mail_prompt.txt")
 		if not prompt_template:
 			LOGGER.error("Failed to read mail prompt, skipping reply for this client.")
 			continue
 
-		# Format the prompt
 		final_prompt = prompt_template.format(
 			context=context,
-			current_email=current_email_text
+			current_email=cleaned_email_text
 		)
 
 		history = [{"role": "system", "content": final_prompt}]
@@ -143,11 +161,9 @@ def reply():
 		response_msg_id = email.utils.make_msgid()
 		last_mail = unresponded[-1]
 
-		# --- Corrected Threading Logic ---
 		parent_message_id = last_mail['message_id']
 		parent_references = last_mail.get('references') or ''
 		
-		# Construct the new References header
 		ref_list = parent_references.split()
 		if parent_message_id not in ref_list:
 			ref_list.append(parent_message_id)
@@ -167,7 +183,7 @@ def reply():
 				subject=last_mail['subject'],
 				body=llm_output,
 				child_of=parent_message_id,
-				references=new_references, # Store the new references chain
+				references=new_references,
 				responded=1
 			))
 			embedding = emb.embed(last_mail['subject'], llm_output)
