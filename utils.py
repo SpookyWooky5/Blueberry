@@ -83,6 +83,37 @@ def escape_special_chars(s):
 def remove_think_blocks(s):
 	return re.sub(r'<think>[\s\S]*?<\/think>', '', s, flags=re.DOTALL).strip()
 
+def strip_quoted_reply(body: str) -> str:
+    """
+    Removes quoted reply text and signatures from an email body.
+    """
+    # Pattern for "On <date>, <person> wrote:"
+    on_date_wrote_pattern = re.compile(r"On\s.*(wrote|écrit):", re.IGNORECASE | re.DOTALL)
+    # Pattern for ">" style quotes
+    quote_pattern = re.compile(r"^\s?>.*$", re.MULTILINE)
+    # Pattern for common signature lines
+    signature_pattern = re.compile(r"^--\s*$", re.MULTILINE)
+
+    # Find the earliest occurrence of any reply indicator
+    on_date_match = on_date_wrote_pattern.search(body)
+    signature_match = signature_pattern.search(body)
+
+    cut_off_index = len(body)
+
+    if on_date_match:
+        cut_off_index = min(cut_off_index, on_date_match.start())
+    
+    if signature_match:
+        cut_off_index = min(cut_off_index, signature_match.start())
+
+    # Truncate the body at the earliest indicator
+    clean_body = body[:cut_off_index]
+
+    # Remove any remaining ">" quote lines from the truncated body
+    clean_body = quote_pattern.sub("", clean_body)
+
+    return clean_body.strip()
+
 
 # --- Mail Server Configuration ---
 SECRETS = load_secrets()

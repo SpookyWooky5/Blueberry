@@ -4,7 +4,7 @@
 # DATE         Description
 # ------------ -----------------------------------------------------------------
 # 14-MAY-2025  Initial Draft
-# 12-JUL-2025  Refactor to use new prompt and context strategy
+# 12-JUL-2025  Refactor for threading and context
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
@@ -143,6 +143,16 @@ def reply():
 		response_msg_id = email.utils.make_msgid()
 		last_mail = unresponded[-1]
 
+		# --- Corrected Threading Logic ---
+		parent_message_id = last_mail['message_id']
+		parent_references = last_mail.get('references') or ''
+		
+		# Construct the new References header
+		ref_list = parent_references.split()
+		if parent_message_id not in ref_list:
+			ref_list.append(parent_message_id)
+		new_references = " ".join(ref_list)
+
 		# Add LLM response to DB
 		db.begin()
 		try:
@@ -156,7 +166,8 @@ def reply():
 				from_name=last_mail['to_name'],
 				subject=last_mail['subject'],
 				body=llm_output,
-				child_of=last_mail['message_id'],
+				child_of=parent_message_id,
+				references=new_references, # Store the new references chain
 				responded=1
 			))
 			embedding = emb.embed(last_mail['subject'], llm_output)
@@ -174,18 +185,13 @@ def reply():
 			continue
 
 		# Reply to client
-		references = last_mail.get("References", "")
-		parent_refs = [ref.strip() for ref in references.split() if ref.strip().startswith("<") and ref.strip().endswith(">")]
-		if last_mail['message_id'] not in parent_refs:
-			parent_refs.append(last_mail['message_id'])
-
 		response_mail = MIMEMultipart()
 		response_mail["From"] = EMAIL
 		response_mail["To"] = last_mail['from_addr']
 		response_mail["Subject"] = f"Re: {last_mail['subject']}"
 		response_mail["Message-ID"] = response_msg_id
-		response_mail["In-Reply-To"] = last_mail['message_id']
-		response_mail["References"] = " ".join(parent_refs)
+		response_mail["In-Reply-To"] = parent_message_id
+		response_mail["References"] = new_references
 		response_mail.attach(MIMEText(llm_output, "plain"))
 		
 		LOGGER.debug("Response mail formatted. Sending...")

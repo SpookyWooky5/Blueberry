@@ -4,7 +4,7 @@
 # DATE         Description
 # ------------ -----------------------------------------------------------------
 # 13-MAY-2025  Initial Draft
-# 12-JUL-2025  Refactor to use shared constants from utils
+# 12-JUL-2025  Refactor to use shared constants and add threading logic
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
@@ -22,7 +22,7 @@ from MailServer import imap_auth
 from Database import connect_to_dataset, get_or_create_client
 from utils import (
     load_secrets,
-    escape_special_chars,
+    strip_quoted_reply,
     EMB_MODEL,
     CLIENTS,
 )
@@ -100,17 +100,18 @@ def insert_mails_to_db(mail_ids):
 				imap_server = imap_auth()
 				imap_server.select('inbox')
 
-			_, raw_mail = imap_server.fetch(str(mail_id).encode(), "(RFC822)")
+			_, raw_mail_data = imap_server.fetch(str(mail_id).encode(), "(RFC822)")
 		except Exception as e:
 			LOGGER.error(f"Could not fetch mail {mail_id} from {IMAP_HOST}: {e}")
 			continue
 
 		try:
-			raw_mail = email.message_from_bytes(raw_mail[0][1])
+			raw_mail = email.message_from_bytes(raw_mail_data[0][1])
 			
-			subject  = raw_mail.get("Subject")
-			msg_id   = raw_mail.get("Message-ID", email.utils.make_msgid())
-			to_name  , to_addr   = email.utils.parseaddr(raw_mail.get("To"))
+			subject    = raw_mail.get("Subject")
+			msg_id     = raw_mail.get("Message-ID", email.utils.make_msgid())
+			references = raw_mail.get("References")
+			to_name,   to_addr   = email.utils.parseaddr(raw_mail.get("To"))
 			from_name, from_addr = email.utils.parseaddr(raw_mail.get("From"))
 
 			# To store as UTC Time
@@ -127,8 +128,8 @@ def insert_mails_to_db(mail_ids):
 			else:
 				body = raw_mail.get_payload(decode=True).decode()
 			
-			body = body.replace("=E2=80=AF", " ")
-			body = escape_special_chars(body.strip())
+			clean_body = strip_quoted_reply(body)
+
 		except Exception as e:
 			LOGGER.error(f"Error occured while decoding mail {msg_id}, {e}")
 			continue
@@ -153,24 +154,25 @@ def insert_mails_to_db(mail_ids):
 				LOGGER.debug(f"Inserting mail {mail_id} into table 'emails'")
 
 				email_id = email_table.insert(dict(
-					client_id = client_id,
-					message_id = msg_id,
-					to_addr = to_addr,
-					to_name = to_name,
-					from_addr = from_addr,
-					from_name = from_name,
-					subject = subject,
-					body = body,
-					time_received = mail_datetime,
-					responded = 0
+					client_id=client_id,
+					message_id=msg_id,
+					to_addr=to_addr,
+					to_name=to_name,
+					from_addr=from_addr,
+					from_name=from_name,
+					subject=subject,
+					body=clean_body,
+					references=references,
+					time_received=mail_datetime,
+					responded=0
 				))
-				embedding = emb.embed(subject, body)
+				embedding = emb.embed(subject, clean_body)
 				embedding = np.array(embedding)
 				email_embed_table.insert(dict(
-					email_id = email_id,
-					client_id = client_id,
-					model = EMB_MODEL,
-					embedding = pickle.dumps(embedding)
+					email_id=email_id,
+					client_id=client_id,
+					model=EMB_MODEL,
+					embedding=pickle.dumps(embedding)
 				))
 				db.commit()
 

@@ -18,6 +18,7 @@ CREATE TABLE emails (
   body           TEXT,
   time_received  DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   child_of       VARCHAR(255),       -- e.g. parent message_id
+  references     TEXT,               -- For threading
   responded      BOOLEAN        NOT NULL DEFAULT 0,
   FOREIGN KEY(child_of) REFERENCES emails(message_id)
 );
