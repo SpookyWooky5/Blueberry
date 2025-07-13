@@ -16,3 +16,6 @@ Data/*
 .python*
 *uv*
 *tmp*
+
+GEMINI.md
+GEMINI_HISTORY.md
