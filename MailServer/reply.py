@@ -123,7 +123,6 @@ def reply():
 		
 		LOGGER.info(f"Found {len(unresponded)} unreplied mails from client {client_id}")
 
-		# --- Restore Command Parsing and /nothink logic ---
 		raw_email_body = "\n\n---\n\n".join(mail['body'] for mail in unresponded)
 		context_config = parse(unresponded[-1]['body'])
 		
@@ -157,7 +156,6 @@ def reply():
 		if llm_output is None:
 			continue
 
-		llm_output = remove_think_blocks(llm_output)
 		response_msg_id = email.utils.make_msgid()
 		last_mail = unresponded[-1]
 
@@ -204,7 +202,7 @@ def reply():
 		response_mail = MIMEMultipart()
 		response_mail["From"] = EMAIL
 		response_mail["To"] = last_mail['from_addr']
-		response_mail["Subject"] = f"Re: {last_mail['subject']}"
+		response_mail["Subject"] = last_mail['subject']
 		response_mail["Message-ID"] = response_msg_id
 		response_mail["In-Reply-To"] = parent_message_id
 		response_mail["References"] = new_references
