@@ -5,3 +5,4 @@ DROP TABLE IF EXISTS memories;
 DROP TABLE IF EXISTS memory_embeddings;
 DROP TABLE IF EXISTS memory_membership;
 DROP TABLE IF EXISTS obsidian_changes_history;
+DROP TABLE IF EXISTS client_goals;

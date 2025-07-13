@@ -132,6 +132,11 @@ def summarize(summary_type, start_date, llm, emb, respond=True):
 			continue
 		query["client_id"] = client_id
 
+		# --- Check if summary already exists ---
+		if mem_table.find_one(client_id=client_id, memory_type=summary_type, period_start=period_start, period_end=period_end):
+			LOGGER.info(f"{summary_type.capitalize()} summary from {period_start} to {period_end} already exists for {client_name}.")
+			continue
+
 		try:
 			records = tuple(table.find(**query, order_by='id'))
 		except Exception as e:

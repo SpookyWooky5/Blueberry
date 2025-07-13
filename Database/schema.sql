@@ -72,3 +72,14 @@ CREATE TABLE obsidian_changes_history (
   change_type      VARCHAR(50),                      -- e.g. 'append', 'replace', 'delete', etc.
   created_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 8) Explicitly tracked client goals
+CREATE TABLE client_goals (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id      INTEGER NOT NULL REFERENCES clients(id),
+  goal_text      TEXT NOT NULL,
+  source_email_id INTEGER REFERENCES emails(id), -- To trace where the goal came from
+  status         VARCHAR(50) NOT NULL DEFAULT 'active', -- e.g., 'active', 'achieved', 'abandoned'
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(client_id, goal_text)
+);

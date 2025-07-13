@@ -19,6 +19,7 @@ import numpy as np
 
 from Logging import logger_init
 from LLM.parse import parse, remove_commands
+from LLM.extract_goals import extract_and_save_goals
 from LLM import BaseChatbot, BaseEmbedder, cosine
 from Database import connect_to_dataset, get_or_create_client
 from utils import (
@@ -218,13 +219,23 @@ def reply():
 			LOGGER.error(f"Error occurred while sending mail: {e}")
 			continue
 		
-		# Mark unresponded mails as responded
+		# Mark unresponded mails as responded and extract goals
 		try:
 			ids_to_update = [mail['id'] for mail in unresponded]
 			email_table.update_many([dict(id=id, responded=1) for id in ids_to_update], ['id'])
 			LOGGER.debug(f"Marked {len(ids_to_update)} mails as responded")
+
+			# --- Extract and Save Goals ---
+			# We use the original, uncleaned text from the user's emails for goal extraction
+			# to ensure the LLM gets the full context.
+			conversation_for_goal_extraction = "\n\n".join(
+				f"User: {mail['body']}" for mail in unresponded
+			)
+			extract_and_save_goals(client_id, conversation_for_goal_extraction, last_mail['id'])
+			# --- End Goal Extraction ---
+
 		except Exception as e:
-			LOGGER.error(f"Could not mark mails as responded: {e}")
+			LOGGER.error(f"Could not mark mails as responded or extract goals: {e}")
 
 # =================================== MAIN =================================== #
 if __name__ == "__main__":
