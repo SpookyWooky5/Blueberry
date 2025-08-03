@@ -33,7 +33,7 @@ from utils import (
 LOGGER = logger_init("MailServer")
 
 # ================================= CONSTANTS ================================ #
-CHECK_IN_INTERVAL_HOURS = os.getenv("CHECK_IN_INTERVAL_HOURS", 12)
+CHECK_IN_INTERVAL_HOURS = int(os.getenv("CHECK_IN_INTERVAL_HOURS", 24))
 
 # ================================= FUNCTIONS ================================ #
 def proactive_checkin():
@@ -55,7 +55,7 @@ def proactive_checkin():
         # 1. Check for client's last communication
         try:
             last_email = email_table.find_one(
-                from_addr=client_email,
+                client_id=client_id,
                 order_by='-time_received'
             )
             if not last_email:
@@ -118,7 +118,7 @@ def proactive_checkin():
             response_mail = MIMEMultipart()
             response_mail["From"] = EMAIL
             response_mail["To"] = client_email
-            response_mail["Subject"] = "Just checking in!"
+            response_mail["Subject"] = "Just checking in 🫶"
             response_mail["Message-ID"] = email.utils.make_msgid()
             response_mail.attach(MIMEText(llm_output, "plain"))
 

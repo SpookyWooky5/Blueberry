@@ -226,11 +226,18 @@ def reply():
 			LOGGER.debug(f"Marked {len(ids_to_update)} mails as responded")
 
 			# --- Extract and Save Goals ---
-			# We use the original, uncleaned text from the user's emails for goal extraction
-			# to ensure the LLM gets the full context.
-			conversation_for_goal_extraction = "\n\n".join(
-				f"User: {mail['body']}" for mail in unresponded
-			)
+			# We build a clean conversation history to ensure the LLM can distinguish
+			# between the user and the assistant.
+			conversation_parts = []
+			for mail in unresponded:
+				# Emails from the client are from the "User"
+				if mail['from_addr'] == client:
+					conversation_parts.append(f"User: {mail['body']}")
+				# Emails from us are from the "Assistant"
+				else:
+					conversation_parts.append(f"Assistant: {mail['body']}")
+			
+			conversation_for_goal_extraction = "\n\n".join(conversation_parts)
 			extract_and_save_goals(client_id, conversation_for_goal_extraction, last_mail['id'])
 			# --- End Goal Extraction ---
 

@@ -50,60 +50,76 @@ def remove_commands(body):
 
 def parse(body):
 	LOGGER.debug("Parsing mail body(s) for commands")
-	context_config = DEFAULT_CONTEXT_CONFIG.copy()
+	# Start with a deep copy of the defaults
+	context_config = {
+		"remember": DEFAULT_CONTEXT_CONFIG["remember"].copy(),
+		"embeds": DEFAULT_CONTEXT_CONFIG["embeds"].copy(),
+		"readobs": DEFAULT_CONTEXT_CONFIG["readobs"].copy()
+	}
 	
 	commands = re.findall(COMMAND_RE_PATTERN, body)
 	for command in commands:
-		args = re.split(r'[\/,\[\]]', command)[1:-1]
+		# Extract command and args, filtering out empty strings from split
+		parts = [p for p in re.split(r'[\/,\[\]]', command) if p]
+		if not parts:
+			continue
+		
+		cmd_name = parts[0]
+		cmd_args = parts # Pass the whole list including the command name
 
-		if args[0] == "remember":
-			LOGGER.debug(f"Command '{args[0]}' found with args: {args[1:]}")
-			context_config["remember"] = parse_remember()
-		elif args[0] == "embeds":
-			LOGGER.debug(f"Command '{args[0]}' found with args: {args[1:]}")
-			context_config["embeds"] = parse_embeds()
+		if cmd_name == "remember":
+			LOGGER.debug(f"Command '{cmd_name}' found with args: {cmd_args[1:]}")
+			context_config["remember"] = parse_remember(cmd_args)
+		elif cmd_name == "embeds":
+			LOGGER.debug(f"Command '{cmd_name}' found with args: {cmd_args[1:]}")
+			context_config["embeds"] = parse_embeds(cmd_args)
 		else:
-			LOGGER.warning(f"Command {args[0]} is not recognized!")
+			LOGGER.warning(f"Command {cmd_name} is not recognized!")
 			continue
 	return context_config
 
 def parse_remember(args):
 	config = DEFAULT_CONTEXT_CONFIG["remember"].copy()
+	# args[0] is the command name, so iterate from args[1]
 	for arg in args[1:]:
-		match arg[-1]:
-			case "":
-				config["enable"] = False
-			case "E":
-				if arg[:-1] == "T":
-					config["today_emails"] = True
-				else:
-					config["today_emails"] = False
-			case "D":
-				if arg[:-1].isnumeric():
-					config["time_filters"]["daily"] = int(arg[:-1])
-			case "W":
-				if arg[:-1].isnumeric():
-					config["time_filters"]["weekly"] = int(arg[:-1])
-			case "M":
-				if arg[:-1].isnumeric():
-					config["time_filters"]["monthly"] = int(arg[:-1])
-			case "Q":
-				if arg[:-1].isnumeric():
-					config["time_filters"]["quarterly"] = int(arg[:-1])
-			case _:
-				LOGGER.warning(f"Argument {arg} of Command {args[0]} is invalid!")
+		arg = arg.upper()
+		# Handle simple enable/disable flags
+		if arg == 'T':
+			config["enable"] = True
+			continue
+		if arg == 'F':
+			config["enable"] = False
+			continue
+
+		value_str = arg[:-1]
+		unit = arg[-1]
+
+		if unit == "E":
+			config["today_emails"] = (value_str == "T")
+		elif unit == "D" and value_str.isnumeric():
+			config["time_filters"]["daily"] = int(value_str)
+		elif unit == "W" and value_str.isnumeric():
+			config["time_filters"]["weekly"] = int(value_str)
+		elif unit == "M" and value_str.isnumeric():
+			config["time_filters"]["monthly"] = int(value_str)
+		elif unit == "Q" and value_str.isnumeric():
+			config["time_filters"]["quarterly"] = int(value_str)
+		else:
+			LOGGER.warning(f"Argument '{arg}' for command '{args[0]}' is invalid!")
 	return config
 
 def parse_embeds(args):
 	config = DEFAULT_CONTEXT_CONFIG["embeds"].copy()
-	if args[1] == "T":
-		config["enable"] = True
-	else:
-		config["enable"] = False
+	if len(args) > 1:
+		enable_arg = args[1].upper()
+		if enable_arg in ["T", "TRUE"]:
+			config["enable"] = True
+		elif enable_arg in ["F", "FALSE"]:
+			config["enable"] = False
+	
 	if len(args) > 2 and args[2].isnumeric():
 		config["topk"] = int(args[2])
-	else:
-		LOGGER.warning(f"Argument {args[1:]} of Command {args[0]} is invalid!")
+	
 	return config
 		
 # =================================== MAIN =================================== #

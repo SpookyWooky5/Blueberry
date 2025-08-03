@@ -22,7 +22,7 @@ LOGGER = logger_init("Common")
 # ================================= CONSTANTS ================================ #
 # --- Directories ---
 CFGDIR = os.environ["Xml"]
-PROMPTS_DIR = "/home/mainberry/Dev/prompts"
+PROMPTS_DIR = os.environ["Prompts"]
 
 # --- Environment Variables ---
 load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
