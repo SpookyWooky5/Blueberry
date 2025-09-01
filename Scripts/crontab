@@ -6,9 +6,9 @@
 # For periodic mail response
 */10 * * * * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/reply.py"
 
-# At 8 am every other day
+# At 8 am every 3rd day
 # For proactive check-ins
-0 8 */2 * * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/proactive_checkin.py"
+0 8 */3 * * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/proactive_checkin.py"
 
 # At 07:01
 # For daily summary

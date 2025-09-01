@@ -131,10 +131,6 @@ def reply():
 		cleaned_email_text = remove_commands(raw_email_body)
 		cleaned_email_text = remove_think_blocks(cleaned_email_text)
 		cleaned_email_text.replace("/think", "")
-		if "/think" in remove_think_blocks(unresponded[-1]['body']):
-			cleaned_email_text += "\n/think"
-		else:
-			cleaned_email_text += "\n/nothink"
 
 		# Build context based on parsed commands
 		context = get_context_from_config(db, emb, client_id, cleaned_email_text, context_config)
