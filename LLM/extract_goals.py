@@ -11,6 +11,7 @@ import json
 from Logging import logger_init
 from Database import connect_to_dataset
 from LLM import OllamaChat
+from Obsidian import write_goal
 from utils import read_prompt_from_file, remove_think_blocks, LLM_MODEL
 
 # ============================= GLOBAL VARIABLES ============================= #
@@ -79,6 +80,14 @@ def extract_and_save_goals(client_id: int, conversation_text: str, source_email_
     except Exception as e:
         db.rollback()
         LOGGER.error(f"Failed to insert goals into database: {e}")
+        return
+
+    for goal in goals:
+        if isinstance(goal, str) and goal.strip():
+            try:
+                write_goal(goal.strip(), client_id, source_email_id)
+            except Exception as e:
+                LOGGER.error(f"Could not write goal to vault: {e}")
 
 # =================================== MAIN =================================== #
 if __name__ == "__main__":

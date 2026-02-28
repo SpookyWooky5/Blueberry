@@ -14,6 +14,7 @@ import email
 import pickle
 import smtplib
 import numpy as np
+import frontmatter
 from email.mime.text import MIMEText
 from datetime import timedelta, datetime
 from email.mime.multipart import MIMEMultipart
@@ -24,12 +25,14 @@ from Logging import logger_init
 from LLM.cosine import cosine
 from LLM import OllamaChat, OllamaEmbed
 from Database import connect_to_dataset, get_or_create_client
+from Obsidian import write_memory, memory_relpath
 from utils import (
     load_config,
 	remove_think_blocks,
     read_prompt_from_file,
     LLM_MODEL,
     EMB_MODEL,
+    VAULT_DIR,
     EMAIL,
     PASSWORD,
     SMTP_HOST,
@@ -54,33 +57,32 @@ def get_relevant_past_memories(db, emb, client_id, current_period_text, top_k=3)
 
     LOGGER.debug("Finding relevant past memories...")
     try:
-        # Embed the summary of the current period's content
         current_embedding = emb.embed(current_period_text)
 
-        # Fetch all past memory embeddings for the client
-        past_memories = list(db['memory_embeddings'].find(client_id=client_id))
-        if not past_memories:
-            LOGGER.info("No past memories found to compare against.")
+        past = list(db['vault_index'].find(
+            client_id=client_id,
+            file_type={'in': ['daily', 'weekly', 'monthly', 'quarterly']}
+        ))
+        if not past:
+            LOGGER.info("No past memories found in vault_index.")
             return []
 
-        # Calculate cosine similarity
         similarities = []
-        for mem in past_memories:
-            past_embedding = pickle.loads(mem['embedding'])
-            sim = cosine(np.array(current_embedding), np.array(past_embedding))
-            similarities.append((sim, mem['memory_id']))
+        for row in past:
+            sim = cosine(np.array(current_embedding), np.array(pickle.loads(row['embedding'])))
+            similarities.append((sim, row['file_path'], row['period_start']))
 
-        # Sort by similarity and get top_k
         similarities.sort(key=lambda x: x[0], reverse=True)
-        top_memory_ids = [mem_id for sim, mem_id in similarities[:top_k]]
+        top = similarities[:top_k]
 
-        if not top_memory_ids:
-            return []
+        results = []
+        for sim, rel_path, period_start in top:
+            abs_path = os.path.join(VAULT_DIR, rel_path)
+            post = frontmatter.load(abs_path)
+            results.append({'text': post.content, 'period_start': period_start})
 
-        # Retrieve the text of the most relevant memories
-        relevant_memories = list(db['memories'].find(id=top_memory_ids))
-        LOGGER.info(f"Found {len(relevant_memories)} relevant past memories.")
-        return relevant_memories
+        LOGGER.info(f"Found {len(results)} relevant past memories.")
+        return results
 
     except Exception as e:
         LOGGER.error(f"Could not retrieve relevant past memories: {e}")
@@ -101,8 +103,6 @@ def summarize(summary_type, start_date, llm, emb, respond=True):
 	# Connect to DB
 	db = connect_to_dataset()
 	table = db[cfg['source_table']]
-	mem_table = db['memories']
-	mem_emb_table = db['memory_embeddings']
 
 	# Build filter dict
 	query = {**cfg.get("source_filter", {}),
@@ -133,8 +133,9 @@ def summarize(summary_type, start_date, llm, emb, respond=True):
 		query["client_id"] = client_id
 
 		# --- Check if summary already exists ---
-		if mem_table.find_one(client_id=client_id, memory_type=summary_type, period_start=period_start, period_end=period_end):
-			LOGGER.info(f"{summary_type.capitalize()} summary from {period_start} to {period_end} already exists for {client_name}.")
+		rel_path = memory_relpath(summary_type, period_start)
+		if db['vault_index'].find_one(file_path=rel_path, client_id=client_id):
+			LOGGER.info(f"{summary_type.capitalize()} summary already exists at {rel_path}, skipping.")
 			continue
 
 		try:
@@ -206,31 +207,27 @@ Body:
 		
 		llm_output = remove_think_blocks(llm_output)
 
-		# Add summary to Memory DB
+		# Write summary to vault and index
+		rel_path = write_memory(summary_type, period_start, period_end, llm_output, client_id)
+		LOGGER.debug(f"Wrote {summary_type} summary to vault: {rel_path}")
+
+		embedding_text = f"Subject: {subject}\n\nSummary:\n{llm_output}"
+		embedding = emb.embed(embedding_text)
 		db.begin()
 		try:
-			LOGGER.debug(f'Inserting {subject} for client {client_id} to memory')
-
-			memory_id = mem_table.insert(dict(
+			db['vault_index'].insert(dict(
+				file_path=rel_path,
+				file_type=summary_type,
 				client_id=client_id,
-				memory_type=summary_type,
-				text=llm_output,
+				model=EMB_MODEL,
+				embedding=pickle.dumps(embedding),
 				period_start=period_start,
 				period_end=period_end,
 			))
-			# Embed the combination of the subject and the generated text for better semantic meaning
-			embedding_text = f"Subject: {subject}\n\nSummary:\n{llm_output}"
-			embedding = emb.embed(embedding_text)
-			mem_emb_table.insert(dict(
-				memory_id=memory_id,
-				client_id=client_id,
-				model=EMB_MODEL,
-				embedding=pickle.dumps(embedding)
-			))
 			db.commit()
-			LOGGER.debug(f"Inserted {summary_type} summary in table 'memories'")
+			LOGGER.debug(f"Inserted vault_index row for {rel_path}")
 		except Exception as e:
-			LOGGER.error(f"Could not insert memory in table 'memories': {e}")
+			LOGGER.error(f"Could not insert into vault_index: {e}")
 			db.rollback()
 		
 		# Send summary to client

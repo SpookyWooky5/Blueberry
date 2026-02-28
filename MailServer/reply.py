@@ -16,6 +16,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+import frontmatter as fm
 import numpy as np
 
 from Logging import logger_init
@@ -29,6 +30,7 @@ from utils import (
     read_prompt_from_file,
     LLM_MODEL,
     EMB_MODEL,
+    VAULT_DIR,
     EMAIL,
     PASSWORD,
     SMTP_HOST,
@@ -61,21 +63,25 @@ def get_context_from_config(db, emb, client_id, current_email_text, config):
     # 1. Handle time-based memories from /remember command
     if config.get("remember", {}).get("enable"):
         LOGGER.info("Retrieving recent memories based on time filters.")
-        memory_table = db['memories']
         for period, limit in config["remember"]["time_filters"].items():
             if not limit:
                 continue
             try:
-                records = tuple(memory_table.find(
+                records = list(db['vault_index'].find(
                     client_id=client_id,
-                    memory_type=period,
-                    order_by='-id',
+                    file_type=period,
+                    order_by='-period_start',
                     _limit=limit
                 ))
                 for row in records:
                     if row['id'] not in seen_ids:
                         seen_ids.add(row['id'])
-                        context_parts.append(f"[{row['memory_type'].upper()} SUMMARY from {row['period_start']}]\n{row['text']}\n")
+                        abs_path = os.path.join(VAULT_DIR, row['file_path'])
+                        post = fm.load(abs_path)
+                        context_parts.append(
+                            f"[{period.upper()} SUMMARY from {row['period_start']}]\n"
+                            f"{post.content}\n"
+                        )
             except Exception as e:
                 LOGGER.error(f"Could not find {period} memories: {e}")
 
@@ -86,25 +92,23 @@ def get_context_from_config(db, emb, client_id, current_email_text, config):
 
         try:
             current_embedding = emb.embed(current_email_text, is_query=True)
-            past_memories = list(db['memory_embeddings'].find(client_id=client_id))
-            if past_memories and current_embedding is not None:
-                similarities = []
-                for mem in past_memories:
-                    past_embedding = pickle.loads(mem['embedding'])
-                    sim = cosine(np.array(current_embedding), np.array(past_embedding))
-                    similarities.append((sim, mem['memory_id']))
-
-                # Filter by threshold, then take top_k
-                similarities = [(sim, mem_id) for sim, mem_id in similarities if sim >= SIMILARITY_THRESHOLD]
+            past = list(db['vault_index'].find(client_id=client_id))
+            if past and current_embedding is not None:
+                similarities = [
+                    (cosine(np.array(current_embedding), np.array(pickle.loads(row['embedding']))),
+                     row['id'], row['file_path'], row['period_start'])
+                    for row in past
+                ]
+                similarities = [(s, i, p, d) for s, i, p, d in similarities if s >= SIMILARITY_THRESHOLD]
                 similarities.sort(key=lambda x: x[0], reverse=True)
-                top_memory_ids = [mem_id for sim, mem_id in similarities[:top_k]]
-
-                if top_memory_ids:
-                    relevant_memories = list(db['memories'].find(id=top_memory_ids))
-                    for mem in relevant_memories:
-                        if mem['id'] not in seen_ids:
-                            seen_ids.add(mem['id'])
-                            context_parts.append(f"[PAST MEMORY from {mem['period_start'].strftime('%Y-%m-%d')}]\n{mem['text']}\n[/PAST MEMORY]")
+                for sim, row_id, rel_path, period_start in similarities[:top_k]:
+                    if row_id not in seen_ids:
+                        seen_ids.add(row_id)
+                        abs_path = os.path.join(VAULT_DIR, rel_path)
+                        post = fm.load(abs_path)
+                        context_parts.append(
+                            f"[PAST MEMORY from {period_start}]\n{post.content}\n[/PAST MEMORY]"
+                        )
         except Exception as e:
             LOGGER.error(f"Could not retrieve relevant context by similarity: {e}")
 

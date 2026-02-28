@@ -73,7 +73,20 @@ CREATE TABLE obsidian_changes_history (
   created_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8) Explicitly tracked client goals
+-- 8) Vault file index with embeddings (Phase 2+)
+CREATE TABLE vault_index (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_path    VARCHAR(512) UNIQUE NOT NULL,   -- relative to VAULT_DIR
+  file_type    VARCHAR(50)  NOT NULL,          -- 'daily','weekly','monthly','quarterly','goal'
+  client_id    INTEGER REFERENCES clients(id),
+  model        VARCHAR(100) NOT NULL,
+  embedding    BLOB         NOT NULL,
+  period_start DATE,                           -- non-null for memory files
+  period_end   DATE,                           -- non-null for memory files
+  updated_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 9) Explicitly tracked client goals
 CREATE TABLE client_goals (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   client_id      INTEGER NOT NULL REFERENCES clients(id),

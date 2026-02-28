@@ -1,0 +1,16 @@
+[Unit]
+Description=Blueberry Vault Watchdog
+After=network.target
+
+[Service]
+User=mainberry
+WorkingDirectory=/home/mainberry/Dev
+EnvironmentFile=/home/mainberry/.bash_aliases
+ExecStart=/home/mainberry/Dev/.venv/bin/python /home/mainberry/Dev/watchdog_daemon.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/mainberry/Logs/watchdog.log
+StandardError=append:/home/mainberry/Logs/watchdog.log
+
+[Install]
+WantedBy=multi-user.target

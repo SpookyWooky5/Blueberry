@@ -23,6 +23,7 @@ LOGGER = logger_init("Common")
 # --- Directories ---
 CFGDIR = os.environ["Xml"]
 PROMPTS_DIR = os.environ["Prompts"]
+VAULT_DIR = os.environ["VAULT_DIR"]
 
 # --- Environment Variables ---
 load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
