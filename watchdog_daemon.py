@@ -75,13 +75,16 @@ class VaultHandler(FileSystemEventHandler):
 
     def _sync_goal(self, post):
         goal_text = post.content.strip()
-        status = post.get('status', 'active')
         db = connect_to_dataset()
-        db['client_goals'].update(
-            dict(goal_text=goal_text, status=status),
-            ['goal_text']
-        )
-        LOGGER.info(f"Synced goal status '{status}' → SQLite")
+        db['client_goals'].update(dict(
+            goal_text=goal_text,
+            status=post.get('status', 'active'),
+            deadline=post.get('deadline'),
+            last_reminded=post.get('last_reminded'),
+            reminder_count=post.get('reminder_count', 0),
+            habit_slug=post.get('habit_slug'),
+        ), ['goal_text'])
+        LOGGER.info(f"Synced goal '{goal_text[:50]}' → SQLite")
 
 
 if __name__ == "__main__":

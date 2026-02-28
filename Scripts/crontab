@@ -25,3 +25,6 @@
 # At 01:01 on day-of-month 1 in every 3rd month
 # For quarterly summary
 1 1 1 */3 * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py quarterly"
+
+# At 09:00 daily — goal reminder check (Phase 3)
+0 9 * * * /usr/bin/flock -n /tmp/blueberry_reminder.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/reminder_daemon.py"

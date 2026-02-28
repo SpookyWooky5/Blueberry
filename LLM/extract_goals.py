@@ -11,6 +11,7 @@ import json
 from Logging import logger_init
 from Database import connect_to_dataset
 from LLM import OllamaChat
+from LLM.extract_habits import infer_and_save_habit
 from Obsidian import write_goal
 from utils import read_prompt_from_file, remove_think_blocks, LLM_MODEL
 
@@ -88,6 +89,12 @@ def extract_and_save_goals(client_id: int, conversation_text: str, source_email_
                 write_goal(goal.strip(), client_id, source_email_id)
             except Exception as e:
                 LOGGER.error(f"Could not write goal to vault: {e}")
+
+    if count > 0:
+        try:
+            infer_and_save_habit(client_id, goals, conversation_text)
+        except Exception as e:
+            LOGGER.error(f"Habit inference failed: {e}")
 
 # =================================== MAIN =================================== #
 if __name__ == "__main__":

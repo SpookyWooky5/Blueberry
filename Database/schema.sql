@@ -88,11 +88,15 @@ CREATE TABLE vault_index (
 
 -- 9) Explicitly tracked client goals
 CREATE TABLE client_goals (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  client_id      INTEGER NOT NULL REFERENCES clients(id),
-  goal_text      TEXT NOT NULL,
-  source_email_id INTEGER REFERENCES emails(id), -- To trace where the goal came from
-  status         VARCHAR(50) NOT NULL DEFAULT 'active', -- e.g., 'active', 'achieved', 'abandoned'
-  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id       INTEGER NOT NULL REFERENCES clients(id),
+  goal_text       TEXT NOT NULL,
+  source_email_id INTEGER REFERENCES emails(id),
+  status          VARCHAR(50) NOT NULL DEFAULT 'active', -- 'active','reminded_1'..'reminded_5','ignored','completed','failed','paused'
+  deadline        DATE,                                  -- optional target date
+  last_reminded   DATE,                                  -- date of last reminder email
+  reminder_count  INTEGER NOT NULL DEFAULT 0,            -- 0..5, then auto-ignored
+  habit_slug      VARCHAR(100),                          -- slug of parent Habits/ file
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(client_id, goal_text)
 );

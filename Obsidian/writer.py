@@ -74,8 +74,40 @@ def write_goal(goal_text: str, client_id: int, source_email_id: int,
     return rel
 
 
-# Stubs for Phase 3/4
-def update_goal(slug: str, **fields): ...
+def update_goal(slug: str, **fields) -> str:
+    """Updates frontmatter fields on an existing goal file. Returns relative path."""
+    rel = f"Goals/{slug}.md"
+    abs_path = os.path.join(VAULT_DIR, rel)
+    if not os.path.exists(abs_path):
+        raise FileNotFoundError(f"Goal vault file not found: {rel}")
+    post = frontmatter.load(abs_path)
+    for k, v in fields.items():
+        post[k] = v
+    Path(LOCK_FILE).touch()
+    try:
+        with open(abs_path, 'wb') as f:
+            frontmatter.dump(post, f)
+    finally:
+        Path(LOCK_FILE).unlink(missing_ok=True)
+    return rel
+
+
+def write_habit(name: str, client_id: int) -> str:
+    """Creates a Habits/<slug>.md file. No-op if already exists. Returns relative path."""
+    slug = _slugify(name)
+    rel = f"Habits/{slug}.md"
+    abs_path = os.path.join(VAULT_DIR, rel)
+    if os.path.exists(abs_path):
+        return rel
+    _write(abs_path, {
+        "client_id": client_id,
+        "created": datetime.now().strftime("%Y-%m-%d"),
+        "status": "active",
+    }, name)
+    return rel
+
+
+# Stubs for Phase 4
 def write_observation(content: str, date) -> str: ...
 def write_knowledge(title: str, content: str) -> str: ...
 def write_pattern(title: str, content: str) -> str: ...

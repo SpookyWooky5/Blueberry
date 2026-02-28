@@ -25,6 +25,8 @@ from LLM.extract_goals import extract_and_save_goals
 from LLM.classify import classify_email
 from LLM import OllamaChat, OllamaEmbed, cosine
 from Database import connect_to_dataset, get_or_create_client
+from Obsidian import update_goal
+from Obsidian.writer import _slugify
 from utils import (
     remove_think_blocks,
     read_prompt_from_file,
@@ -46,12 +48,56 @@ LOGGER = logger_init("MailServer")
 SIMILARITY_THRESHOLD = 0.65
 
 # ================================= FUNCTIONS ================================ #
-def get_context_from_config(db, emb, client_id, current_email_text, config):
+def _handle_goal_acknowledgment(db, emb, client_id, email_text, context_parts):
+    """Finds the best-matching active goal, resets its reminder state, injects context."""
+    try:
+        embedding = emb.embed(email_text, is_query=True)
+        goal_rows = list(db['vault_index'].find(client_id=client_id, file_type='goals'))
+        if not goal_rows or embedding is None:
+            return
+
+        best_sim, best_row = max(
+            ((cosine(np.array(embedding), np.array(pickle.loads(r['embedding']))), r)
+             for r in goal_rows),
+            key=lambda x: x[0]
+        )
+
+        rel_path = best_row['file_path']
+        abs_path = os.path.join(VAULT_DIR, rel_path)
+        post = fm.load(abs_path)
+        goal_text = post.content.strip()
+        slug = _slugify(goal_text)
+
+        update_goal(slug, reminder_count=0, status='active', last_reminded=None)
+        db['client_goals'].update(
+            dict(goal_text=goal_text, reminder_count=0, status='active', last_reminded=None),
+            ['goal_text']
+        )
+        context_parts.append(f"[GOAL ACKNOWLEDGED: {goal_text}]")
+        LOGGER.info(f"Goal acknowledged and reset: '{goal_text[:60]}'")
+    except Exception as e:
+        LOGGER.error(f"Could not handle goal acknowledgment: {e}")
+
+
+def get_context_from_config(db, emb, client_id, current_email_text, config, labels=None):
     """Builds the context string based on the parsed command configuration."""
+    if labels is None:
+        labels = []
     context_parts = []
     seen_ids = set()
 
-    # 0. Always inject active goals at the top
+    # 0. Handle goal acknowledgment (resets reminder state, injects confirmation)
+    if 'goal_acknowledge' in labels:
+        _handle_goal_acknowledgment(db, emb, client_id, current_email_text, context_parts)
+
+    # 0b. Flag ambiguous goal update so the LLM asks for clarification
+    if 'goal_update_ambiguous' in labels:
+        context_parts.append(
+            "[NOTE: This email may contain a goal update. If so, include one focused clarifying question: "
+            "'Were you updating me on [goal]?']"
+        )
+
+    # 2. Always inject active goals
     try:
         active_goals = list(db['client_goals'].find(client_id=client_id, status='active'))
         if active_goals:
@@ -60,7 +106,7 @@ def get_context_from_config(db, emb, client_id, current_email_text, config):
     except Exception as e:
         LOGGER.error(f"Could not retrieve active goals: {e}")
 
-    # 1. Handle time-based memories from /remember command
+    # 3. Handle time-based memories from /remember command
     if config.get("remember", {}).get("enable"):
         LOGGER.info("Retrieving recent memories based on time filters.")
         for period, limit in config["remember"]["time_filters"].items():
@@ -85,7 +131,7 @@ def get_context_from_config(db, emb, client_id, current_email_text, config):
             except Exception as e:
                 LOGGER.error(f"Could not find {period} memories: {e}")
 
-    # 2. Handle similarity-based memories from /embeds command
+    # 4. Handle similarity-based memories from /embeds command
     if config.get("embeds", {}).get("enable"):
         LOGGER.info("Retrieving relevant memories based on similarity.")
         top_k = config["embeds"].get("topk", 3)
@@ -168,7 +214,7 @@ def reply():
 			LOGGER.info("Casual email detected — skipping deep RAG retrieval")
 			context = ""
 		else:
-			context = get_context_from_config(db, emb, client_id, cleaned_email_text, context_config)
+			context = get_context_from_config(db, emb, client_id, cleaned_email_text, context_config, labels)
 
 		prompt_template = read_prompt_from_file("mail_prompt.txt")
 		if not prompt_template:
