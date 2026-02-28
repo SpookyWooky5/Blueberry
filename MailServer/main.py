@@ -31,7 +31,7 @@ from utils import load_secrets, load_config, escape_special_chars, read_prompt_f
 LOGGER = logger_init("MailServer")
 
 # ================================= CONSTANTS ================================ #
-CFGDIR = os.environ["Xml"]
+CFGDIR = os.environ["BCFG"]
 load_dotenv(dotenv_path=os.path.join(CFGDIR, ".env"))
 
 secrets   = load_secrets()

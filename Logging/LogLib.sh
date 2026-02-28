@@ -49,7 +49,7 @@ LogInitFnct() {
 	LOG_LIB_LOG_FILE_CREATED="FALSE"
 	
 	LogLibLogModule="$1"
-	LogLibLogFileName="${Log}/${LogLibLogModule}".log
+	LogLibLogFileName="${LOG_DIR}/${LogLibLogModule}".log
 
     # Perform rotation before touching the new log file
     RotateLogFnct "$LogLibLogFileName" || exit 9

@@ -5,17 +5,18 @@
 # DATE         Description
 # ------------ -----------------------------------------------------------------
 # 19-MAY-2025  Initial Draft
+# 26-FEB-2026  v2 Changes
 # ============================================================================ #
 
 export USER="mainberry"
-export DEV="/home/mainberry/Dev"
+export DEV="/home/mainberry/Blueberry"
 export PYTHONPATH="$DEV:$PYTHONPATH"
-export Log="/home/mainberry/Logs"
-export Xml="$DEV/Configs"
-export Prompts="$DEV/prompts"
-export VAULT_DIR="/home/mainberry/vault"
+export LOG_DIR="/home/mainberry/Logs"
+export BCFG="$DEV/Configs"
+export PROMPTS_DIR="$DEV/prompts"
+export VAULT_DIR="/home/mainberry/Vault"
 VENV_PATH="$DEV/.venv"
-LOG_FILE="$Log/cron.log"
+LOG_FILE="$LOG_DIR/cron.log"
 BASH_ALIASES="$HOME/.bash_aliases"
 
 # Ensure we are using bash

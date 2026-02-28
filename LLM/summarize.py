@@ -172,7 +172,8 @@ def summarize(summary_type, start_date, llm, emb, respond=True):
 		client_id = get_or_create_client(client, client_name)
 		if client_id == -1:
 			continue
-		query["client_id"] = client_id
+		if not is_yearly:
+			query["client_id"] = client_id
 
 		# --- Check if summary already exists ---
 		rel_path = memory_relpath(summary_type, period_start)

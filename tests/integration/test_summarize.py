@@ -20,17 +20,19 @@ from datetime import datetime, date
 @patch("LLM.summarize.read_prompt_from_file", return_value="Detect: {summary_type}\n{summary_text}")
 def test_detect_pattern_writes_when_found(mock_prompt, mock_wp, tmp_vault):
     from LLM.summarize import _detect_and_write_pattern
+    mock_table = MagicMock()
     db = MagicMock()
+    db.__getitem__ = MagicMock(return_value=mock_table)
     llm = MagicMock()
     emb = MagicMock()
-    emb.embed.return_value = np.array([0.1, 0.2])
+    emb.embed.return_value = np.array([0.1])  # length-1 avoids numpy bool ambiguity
     llm.generate_response.return_value = '{"title": "Stress and Work", "content": "They co-occur."}'
     mock_wp.return_value = "Patterns/stress-and-work.md"
 
     _detect_and_write_pattern(db, llm, emb, client_id=1, summary_text="...", summary_type="monthly")
 
     mock_wp.assert_called_once_with("Stress and Work", "They co-occur.")
-    db['vault_index'].upsert.assert_called_once()
+    mock_table.upsert.assert_called_once()
 
 
 @patch("LLM.summarize.write_pattern")

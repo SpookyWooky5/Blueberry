@@ -19,7 +19,7 @@ from Logging import logger_init
 LOGGER = logger_init("Database")
 
 # ================================= CONSTANTS ================================ #
-DBPATH = os.environ["Db"]
+DBPATH = os.environ["DB_DIR"]
 DATAPATH = os.environ["Data"]
 
 # ================================== CLASSES ================================= #

@@ -11,33 +11,10 @@ import json
 
 from Logging import logger_init
 from LLM.main import OllamaChat
+from utils import read_prompt_from_file
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("LLM")
-
-# ================================= CONSTANTS ================================ #
-_CLASSIFY_SYSTEM_PROMPT = """\
-You are Blueberry, an AI email assistant. Classify the email below.
-
-LABELS (choose one or more):
-- emotional      — emotional dump, needs empathetic reply
-- goal_set       — states a new goal or intention
-- goal_update    — updates progress on an existing goal
-- goal_acknowledge — explicitly acknowledges a reminder ("yes I'm working on it")
-- goal_update_ambiguous — mentions something that MIGHT be a goal update but confidence is low
-- observation    — self-reflection, doesn't need a deep reply
-- pattern        — explicitly links two topics or identifies a recurring connection
-- knowledge      — technical note or fact to store
-- casual         — greeting, small talk, or simple question
-
-TAGS: 2-4 short thematic tags describing the email content (e.g. work-stress, project-name).
-
-Return ONLY valid JSON, nothing else: {"labels": ["..."], "tags": ["..."]}
-
-Example:
-Email: "I'm exhausted after the sprint review but really proud we shipped it."
-Output: {"labels": ["emotional", "observation"], "tags": ["work", "shipping", "exhaustion"]}
-"""
 
 # ================================= FUNCTIONS ================================ #
 def classify_email(llm: OllamaChat, subject: str, body: str) -> dict:
@@ -48,9 +25,14 @@ def classify_email(llm: OllamaChat, subject: str, body: str) -> dict:
     labels: one or more from the fixed structural set
     tags: dynamic semantic tags describing the email content
     """
+    system_prompt = read_prompt_from_file("classify_prompt.txt")
+    if not system_prompt:
+        LOGGER.error("Could not read classify_prompt.txt; defaulting to casual")
+        return {"labels": ["casual"], "tags": []}
+
     user_content = f"Subject: {subject}\n\n{body}"
     history = [
-        {"role": "system", "content": _CLASSIFY_SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
     llm.init_history(history)

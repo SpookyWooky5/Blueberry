@@ -82,8 +82,9 @@ def test_escape_double_quote():
 
 
 def test_escape_carriage_return():
+    # \r is normalized to \n before escaping, so it becomes \\n
     result = escape_special_chars("a\rb")
-    assert "\\r" in result
+    assert "\\n" in result
 
 
 # ── read_prompt_from_file ──────────────────────────────────────────────────────

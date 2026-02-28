@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 User=mainberry
-WorkingDirectory=/home/mainberry/Dev
-EnvironmentFile=/home/mainberry/.bash_aliases
-ExecStart=/home/mainberry/Dev/.venv/bin/python /home/mainberry/Dev/watchdog_daemon.py
+WorkingDirectory=/home/mainberry/Blueberry
+EnvironmentFile=/home/mainberry/Blueberry/Configs/.env
+ExecStart=/home/mainberry/Blueberry/.venv/bin/python /home/mainberry/Blueberry/watchdog_daemon.py
 Restart=always
 RestartSec=10
 StandardOutput=append:/home/mainberry/Logs/watchdog.log

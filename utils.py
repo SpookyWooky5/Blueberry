@@ -21,8 +21,8 @@ LOGGER = logger_init("Common")
 
 # ================================= CONSTANTS ================================ #
 # --- Directories ---
-CFGDIR = os.environ["Xml"]
-PROMPTS_DIR = os.environ["Prompts"]
+CFGDIR = os.environ["BCFG"]
+PROMPTS_DIR = os.environ["PROMPTS_DIR"]
 VAULT_DIR = os.environ["VAULT_DIR"]
 
 # --- Environment Variables ---
@@ -33,7 +33,7 @@ EMB_MODEL = os.getenv("EMB_MODEL")
 
 # ================================= FUNCTIONS ================================ #
 def load_secrets(filename="secrets.yml"):
-	with open(os.path.join(os.environ["Xml"], filename), "r") as fp:
+	with open(os.path.join(os.environ["BCFG"], filename), "r") as fp:
 		try:
 			LOGGER.debug(f"Opening <{filename}> from Config")
 			data = yaml.safe_load(fp)

@@ -1,33 +1,33 @@
 # At every 5th minute
 # For periodic mail checking
-*/5 * * * * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/fetch.py"
+*/5 * * * * /usr/bin/flock /tmp/blueberry.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/MailServer/fetch.py"
 
 # At every 10th minute
 # For periodic mail response
-*/10 * * * * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/reply.py"
+*/10 * * * * /usr/bin/flock /tmp/blueberry.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/MailServer/reply.py"
 
 # At 8 am every 3rd day
 # For proactive check-ins
-0 8 */3 * * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/MailServer/proactive_checkin.py"
+0 8 */3 * * /usr/bin/flock /tmp/blueberry.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/MailServer/proactive_checkin.py"
 
-# At 07:01
+# At 06:01
 # For daily summary
-1 7 * * * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py daily"
+1 6 * * * /usr/bin/flock /tmp/blueberry.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/LLM/summarize.py daily"
 
-# At 23:01 on Sunday
+# At 22:01 on Sunday
 # For weekly summary
-1 23 * * 0 /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py weekly"
+1 22 * * 0 /usr/bin/flock /tmp/blueberry.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/LLM/summarize.py weekly"
 
 # At 00:01 on day-of-month 1
 # For monthly summary
-1 0 1 * * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py monthly"
+1 0 1 * * /usr/bin/flock /tmp/blueberry.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/LLM/summarize.py monthly"
 
 # At 01:01 on day-of-month 1 in every 3rd month
 # For quarterly summary
-1 1 1 */3 * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py quarterly"
+1 1 1 */3 * /usr/bin/flock /tmp/blueberry.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/LLM/summarize.py quarterly"
 
-# At 09:00 daily — goal reminder check (Phase 3)
-0 9 * * * /usr/bin/flock -n /tmp/blueberry_reminder.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/reminder_daemon.py"
+# At 08:00 daily — goal reminder check (Phase 3)
+0 8 * * * /usr/bin/flock /tmp/blueberry_reminder.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/reminder_daemon.py"
 
 # Jan 1 at 02:01 — yearly summary (Phase 4)
-1 2 1 1 * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py yearly"
+1 2 1 1 * /usr/bin/flock /tmp/blueberry.lock -c "/home/mainberry/Blueberry/Scripts/LoadEnv.sh /home/mainberry/Blueberry/LLM/summarize.py yearly"

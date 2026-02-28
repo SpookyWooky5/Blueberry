@@ -17,9 +17,15 @@ _tmpdir  = tempfile.mkdtemp(prefix="blueberry_test_")
 _cfg     = os.path.join(_tmpdir, "config")
 _prompts = os.path.join(_tmpdir, "prompts")
 _vault   = os.path.join(_tmpdir, "vault")
+_logs    = os.path.join(_tmpdir, "logs")
+_db      = os.path.join(_tmpdir, "db")
+_data    = os.path.join(_tmpdir, "data")
 os.makedirs(_cfg)
 os.makedirs(_prompts)
 os.makedirs(_vault)
+os.makedirs(_logs)
+os.makedirs(_db)
+os.makedirs(_data)
 
 _SECRETS_YAML = """\
 Mail:
@@ -47,10 +53,13 @@ with open(os.path.join(_cfg, "process.json"), "w") as f:
         },
     }, f)
 
-os.environ.setdefault("Xml",             _cfg)
-os.environ.setdefault("Prompts",         _prompts)
-os.environ.setdefault("VAULT_DIR",       _vault)
-os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
+os.environ.setdefault("BCFG",             _cfg)
+os.environ.setdefault("PROMPTS_DIR",      _prompts)
+os.environ.setdefault("VAULT_DIR",        _vault)
+os.environ.setdefault("LOG_DIR",          _logs)
+os.environ.setdefault("DB_DIR",           _db)
+os.environ.setdefault("Data",             _data)
+os.environ.setdefault("OLLAMA_BASE_URL",  "http://localhost:11434")
 # ── End bootstrap ──────────────────────────────────────────────────────────────
 
 
@@ -68,8 +77,10 @@ def tmp_vault(tmp_path, monkeypatch):
 
     import utils
     import Obsidian.writer as writer
-    monkeypatch.setattr(utils,  "VAULT_DIR", str(vault))
-    monkeypatch.setattr(writer, "VAULT_DIR", str(vault), raising=False)
+    import MailServer.reply as reply
+    monkeypatch.setattr(utils,   "VAULT_DIR", str(vault))
+    monkeypatch.setattr(writer,  "VAULT_DIR", str(vault), raising=False)
+    monkeypatch.setattr(reply,   "VAULT_DIR", str(vault), raising=False)
     return vault
 
 

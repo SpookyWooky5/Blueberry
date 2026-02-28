@@ -17,7 +17,7 @@ from Database import connect_to_db
 LOGGER = logger_init("Database")
 
 # ================================= CONSTANTS ================================ #
-DBPATH = os.environ["Db"]
+DBPATH = os.environ["DB_DIR"]
 CREATE_SCHEMA_PATH = os.path.join(DBPATH, "schema.sql")
 DROP_SCHEMA_PATH = os.path.join(DBPATH, "drop_db.sql")
 

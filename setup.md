@@ -44,25 +44,25 @@ synced to your devices via Syncthing.
 
 ## 2. Directory Layout
 
-The deployment root is `/home/mainberry/Dev/`. Adjust paths throughout if you use a
+The deployment root is `/home/mainberry/Blueberry/`. Adjust paths throughout if you use a
 different root.
 
 ```
 /home/mainberry/
-├── Dev/                        # Deployment root (PYTHONPATH points here)
+├── Blueberry/                  # Deployment root (PYTHONPATH points here)
 │   ├── MailServer/             # Email fetch, reply, proactive check-in
 │   ├── LLM/                    # Ollama wrappers, summarize, extract_*
 │   ├── Database/               # SQLite schema + dataset ORM helpers
 │   ├── Obsidian/               # Vault writer API
 │   ├── Logging/                # Log rotation + formatters
 │   ├── Scripts/                # LoadEnv.sh, blueberry-watchdog.service, crontab
-│   ├── Configs/                # secrets.yml, process.json, .env    ← $Xml
-│   ├── prompts/                # All .txt prompt files               ← $Prompts
+│   ├── Configs/                # secrets.yml, process.json, .env     ← $BCFG
+│   ├── prompts/                # All .txt prompt files               ← $PROMPTS_DIR
 │   ├── watchdog_daemon.py      # Vault file watcher (systemd service)
 │   ├── reminder_daemon.py      # Goal reminder cron
 │   └── .venv/                  # Python virtual environment
 │
-├── Logs/                       # Log files for all processes         ← $Log
+├── Logs/                       # Log files for all processes         ← $LOG_DIR
 │   ├── LLM.log
 │   ├── MailServer.log
 │   ├── Database.log
@@ -70,7 +70,7 @@ different root.
 │   ├── watchdog.log
 │   └── cron.log
 │
-└── vault/                      # Obsidian vault root                 ← $VAULT_DIR
+└── Vault/                      # Obsidian vault root                 ← $VAULT_DIR
     ├── Goals/
     ├── Habits/
     ├── Patterns/
@@ -86,7 +86,7 @@ different root.
         └── yearly/
 ```
 
-The SQLite database lives at `$Db/db.sqlite3` (see Section 3 for how `$Db` is set).
+The SQLite database lives at `$DB_DIR/db.sqlite3` (see Section 3 for how `$DB_DIR` is set).
 
 ---
 
@@ -98,24 +98,24 @@ All environment variables must be exported before running any script. They are s
 
 | Variable | Value | Where used |
 |----------|-------|-----------|
-| `Xml` | `/home/mainberry/Dev/Configs` | Config directory — `utils.py`, `Logging/utils.py`, `Database/create_db.py` |
-| `Prompts` | `/home/mainberry/Dev/prompts` | Prompt directory — `utils.read_prompt_from_file()` |
-| `VAULT_DIR` | `/home/mainberry/vault` | Obsidian vault root — `Obsidian/writer.py`, `MailServer/reply.py`, `LLM/summarize.py` |
-| `Log` | `/home/mainberry/Logs` | Log directory — `Logging/utils.py` |
-| `Db` | `/home/mainberry/Dev/Configs` | SQLite database dir — `Database/db_utils.py`, `Database/create_db.py` |
-| `Data` | `/home/mainberry/Dev/Data` | Data directory — `Database/db_utils.py` (currently reserved) |
-| `PYTHONPATH` | `/home/mainberry/Dev:$PYTHONPATH` | Makes all subpackages importable without installing |
+| `BCFG` | `/home/mainberry/Blueberry/Configs` | Config directory — `utils.py`, `Logging/utils.py`, `Database/create_db.py` |
+| `PROMPTS_DIR` | `/home/mainberry/Blueberry/prompts` | Prompt directory — `utils.read_prompt_from_file()` |
+| `VAULT_DIR` | `/home/mainberry/Vault` | Obsidian vault root — `Obsidian/writer.py`, `MailServer/reply.py`, `LLM/summarize.py` |
+| `LOG_DIR` | `/home/mainberry/Logs` | Log directory — `Logging/utils.py` |
+| `DB_DIR` | `/home/mainberry/Blueberry/Database` | SQLite database dir — `Database/db_utils.py`, `Database/create_db.py` |
+| `Data` | `/home/mainberry/Blueberry/Data` | Data directory — `Database/db_utils.py` (currently reserved) |
+| `PYTHONPATH` | `/home/mainberry/Blueberry:$PYTHONPATH` | Makes all subpackages importable without installing |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API endpoint — `LLM/main.py` (defaults to this if unset) |
 
 ### Setting them in `~/.bash_aliases`
 
 ```bash
-export DEV="/home/mainberry/Dev"
-export Log="/home/mainberry/Logs"
-export Xml="$DEV/Configs"
-export Prompts="$DEV/prompts"
-export VAULT_DIR="/home/mainberry/vault"
-export Db="$DEV/Configs"
+export DEV="/home/mainberry/Blueberry"
+export LOG_DIR="/home/mainberry/Logs"
+export BCFG="$DEV/Configs"
+export PROMPTS_DIR="$DEV/prompts"
+export VAULT_DIR="/home/mainberry/Vault"
+export DB_DIR="$DEV/Database"
 export Data="$DEV/Data"
 export PYTHONPATH="$DEV:$PYTHONPATH"
 export OLLAMA_BASE_URL="http://localhost:11434"  # optional, this is the default
@@ -127,7 +127,7 @@ After editing, reload: `source ~/.bash_aliases`
 
 ## 4. Config Files
 
-All config files live in `$Xml` (`/home/mainberry/Dev/Configs/`).
+All config files live in `$BCFG` (`/home/mainberry/Blueberry/Configs/`).
 
 ### 4a. `secrets.yml`
 
@@ -218,7 +218,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### Create the virtual environment
 
 ```bash
-cd /home/mainberry/Dev
+cd /home/mainberry/Blueberry
 uv venv .venv
 ```
 
@@ -248,10 +248,10 @@ uv sync
 
 ## 6. Database Setup
 
-The database is a single SQLite file at `$Db/db.sqlite3`. Create it fresh:
+The database is a single SQLite file at `$DB_DIR/db.sqlite3`. Create it fresh:
 
 ```bash
-cd /home/mainberry/Dev
+cd /home/mainberry/Blueberry
 python Database/create_db.py
 ```
 
@@ -436,7 +436,7 @@ edits) and re-embeds the changed files into `vault_index`.
 
 ```bash
 # Copy the service file
-sudo cp /home/mainberry/Dev/Scripts/blueberry-watchdog.service \
+sudo cp /home/mainberry/Blueberry/Scripts/blueberry-watchdog.service \
         /etc/systemd/system/
 
 # Enable and start
@@ -495,7 +495,7 @@ Two flock files are used:
 
 ## 13. Logs
 
-All logs go to `$Log` (`/home/mainberry/Logs/`). Log level per process is set in
+All logs go to `$LOG_DIR` (`/home/mainberry/Logs/`). Log level per process is set in
 `process.json`.
 
 | File | Written by |
@@ -516,10 +516,10 @@ Log files are rotated daily: the previous day's file is renamed to `<name>.log.Y
 ```
 [ ] Install Ollama, pull LLM and embedding models
 [ ] Create Python venv and install dependencies (uv sync)
-[ ] Create $Xml directory and write secrets.yml, .env, process.json
+[ ] Create $BCFG directory and write secrets.yml, .env, process.json
 [ ] Set all required env vars in ~/.bash_aliases
-[ ] Create $Log directory
-[ ] Create $Db directory
+[ ] Create $LOG_DIR directory
+[ ] Create $DB_DIR directory
 [ ] Run: python Database/create_db.py   (creates db.sqlite3)
 [ ] Create vault directory structure (mkdir -p ...)
 [ ] Point Obsidian at the vault directory
@@ -571,18 +571,18 @@ Log files are rotated daily: the previous day's file is renamed to `<name>.log.Y
   to correct or remove facts.
 - **`process.json` must have a `"LLM"` key** because `LLM/summarize.py` reads
   `load_config()["LLM"]` at module import time.
-- **The `Db` env var must point to the directory containing `db.sqlite3`**, not to the
+- **The `DB_DIR` env var must point to the directory containing `db.sqlite3`**, not to the
   file itself.
 - **The `Data` env var is declared but currently unused** beyond being required at import
   time in `Database/db_utils.py`.
 
 ### Prompt files
 
-All 10 prompt files must exist in `$Prompts` before running. They are not bundled in the
+All 10 prompt files must exist in `$PROMPTS_DIR` before running. They are not bundled in the
 package — copy them from `prompts/` in the source repo:
 
 ```bash
-cp -r /path/to/source/prompts/* $Prompts/
+cp -r /path/to/source/prompts/* $PROMPTS_DIR/
 ```
 
 | File | Used by |

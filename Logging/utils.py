@@ -15,8 +15,8 @@ import logging.handlers
 from datetime import datetime
 
 # ================================= CONSTANTS ================================ #
-LOGDIR = os.environ["Log"]
-CFGDIR = os.environ["Xml"]
+LOGDIR = os.environ["LOG_DIR"]
+CFGDIR = os.environ["BCFG"]
 LEVELS = {
     "DEBUG"    : logging.DEBUG,
     "INFO"     : logging.INFO,

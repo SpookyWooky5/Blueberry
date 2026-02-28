@@ -1,6 +1,15 @@
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from LLM.classify import classify_email
+
+_FAKE_PROMPT = "You are Blueberry. Classify the email. Return JSON: {\"labels\": [...], \"tags\": [...]}"
+
+
+@pytest.fixture(autouse=True)
+def mock_classify_prompt():
+    """Patch read_prompt_from_file so classify tests don't need the real prompts dir."""
+    with patch("LLM.classify.read_prompt_from_file", return_value=_FAKE_PROMPT):
+        yield
 
 
 @pytest.fixture()
@@ -65,3 +74,10 @@ def test_classify_sets_history_on_llm(llm):
     call_args = llm.init_history.call_args[0][0]
     assert any(m["role"] == "system" for m in call_args)
     assert any(m["role"] == "user" for m in call_args)
+
+
+def test_classify_missing_prompt_file_defaults_to_casual(llm):
+    with patch("LLM.classify.read_prompt_from_file", return_value=None):
+        result = classify_email(llm, "Hi", "msg")
+    assert result == {"labels": ["casual"], "tags": []}
+    llm.generate_response.assert_not_called()
