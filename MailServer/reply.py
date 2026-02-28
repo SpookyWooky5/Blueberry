@@ -5,6 +5,7 @@
 # ------------ -----------------------------------------------------------------
 # 14-MAY-2025  Initial Draft
 # 12-JUL-2025  Refactor for threading and context
+# 28-FEB-2026  Add classification routing, goal injection, RAG fixes
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
@@ -20,7 +21,8 @@ import numpy as np
 from Logging import logger_init
 from LLM.parse import parse, remove_commands
 from LLM.extract_goals import extract_and_save_goals
-from LLM import BaseChatbot, BaseEmbedder, cosine
+from LLM.classify import classify_email
+from LLM import OllamaChat, OllamaEmbed, cosine
 from Database import connect_to_dataset, get_or_create_client
 from utils import (
     remove_think_blocks,
@@ -38,12 +40,23 @@ from utils import (
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")
 
-# ================================== CLASSES ================================= #
+# ================================= CONSTANTS ================================ #
+SIMILARITY_THRESHOLD = 0.65
 
 # ================================= FUNCTIONS ================================ #
 def get_context_from_config(db, emb, client_id, current_email_text, config):
     """Builds the context string based on the parsed command configuration."""
     context_parts = []
+    seen_ids = set()
+
+    # 0. Always inject active goals at the top
+    try:
+        active_goals = list(db['client_goals'].find(client_id=client_id, status='active'))
+        if active_goals:
+            goals_text = "\n".join(f"- {g['goal_text']}" for g in active_goals)
+            context_parts.insert(0, f"[ACTIVE GOALS]\n{goals_text}")
+    except Exception as e:
+        LOGGER.error(f"Could not retrieve active goals: {e}")
 
     # 1. Handle time-based memories from /remember command
     if config.get("remember", {}).get("enable"):
@@ -60,7 +73,9 @@ def get_context_from_config(db, emb, client_id, current_email_text, config):
                     _limit=limit
                 ))
                 for row in records:
-                    context_parts.append(f"[{row['memory_type'].upper()} SUMMARY from {row['period_start']}]\n{row['text']}\n")
+                    if row['id'] not in seen_ids:
+                        seen_ids.add(row['id'])
+                        context_parts.append(f"[{row['memory_type'].upper()} SUMMARY from {row['period_start']}]\n{row['text']}\n")
             except Exception as e:
                 LOGGER.error(f"Could not find {period} memories: {e}")
 
@@ -68,24 +83,28 @@ def get_context_from_config(db, emb, client_id, current_email_text, config):
     if config.get("embeds", {}).get("enable"):
         LOGGER.info("Retrieving relevant memories based on similarity.")
         top_k = config["embeds"].get("topk", 3)
-        
+
         try:
-            current_embedding = emb.embed("Current Email", current_email_text)
+            current_embedding = emb.embed(current_email_text, is_query=True)
             past_memories = list(db['memory_embeddings'].find(client_id=client_id))
-            if past_memories:
+            if past_memories and current_embedding is not None:
                 similarities = []
                 for mem in past_memories:
                     past_embedding = pickle.loads(mem['embedding'])
                     sim = cosine(np.array(current_embedding), np.array(past_embedding))
                     similarities.append((sim, mem['memory_id']))
 
+                # Filter by threshold, then take top_k
+                similarities = [(sim, mem_id) for sim, mem_id in similarities if sim >= SIMILARITY_THRESHOLD]
                 similarities.sort(key=lambda x: x[0], reverse=True)
                 top_memory_ids = [mem_id for sim, mem_id in similarities[:top_k]]
 
                 if top_memory_ids:
                     relevant_memories = list(db['memories'].find(id=top_memory_ids))
                     for mem in relevant_memories:
-                        context_parts.append(f"[PAST MEMORY from {mem['period_start'].strftime('%Y-%m-%d')}]\n{mem['text']}\n[/PAST MEMORY]")
+                        if mem['id'] not in seen_ids:
+                            seen_ids.add(mem['id'])
+                            context_parts.append(f"[PAST MEMORY from {mem['period_start'].strftime('%Y-%m-%d')}]\n{mem['text']}\n[/PAST MEMORY]")
         except Exception as e:
             LOGGER.error(f"Could not retrieve relevant context by similarity: {e}")
 
@@ -99,15 +118,15 @@ def reply():
 	email_embed_table = db['email_embeddings']
 
 	# Init LLM
-	llm = BaseChatbot(LLM_MODEL)
+	llm = OllamaChat(LLM_MODEL)
 	# Init Embedder
-	emb = BaseEmbedder(EMB_MODEL)
-	
+	emb = OllamaEmbed(EMB_MODEL)
+
 	for client, client_name in zip(CLIENTS, CLIENTNAMES):
 		client_id = get_or_create_client(client, client_name)
 		if client_id == -1:
 			continue
-		
+
 		try:
 			LOGGER.debug(f"Retrieving unreplied mails from DB for client {client_id}")
 			unresponded = tuple(email_table.find(
@@ -118,22 +137,34 @@ def reply():
 		except Exception as e:
 			LOGGER.error(f"Could not collect unreplied mails from DB, {e}")
 			continue
-		
+
 		if not unresponded:
 			continue
-		
+
 		LOGGER.info(f"Found {len(unresponded)} unreplied mails from client {client_id}")
+
+		last_mail = unresponded[-1]
+
+		# Classify the most recent email to route appropriately
+		classification = classify_email(llm, last_mail['subject'], last_mail['body'])
+		labels = classification.get("labels", ["casual"])
+		LOGGER.info(f"Email classified as: {labels}, tags: {classification.get('tags', [])}")
 
 		raw_email_body = "\n\n---\n\n".join(mail['body'] for mail in unresponded)
 		context_config = parse(unresponded[-1]['body'])
-		
-		# Clean the body for the LLM and add the think/nothink directive
+
+		# Clean the body for the LLM
 		cleaned_email_text = remove_commands(raw_email_body)
 		cleaned_email_text = remove_think_blocks(cleaned_email_text)
-		cleaned_email_text.replace("/think", "")
+		cleaned_email_text = cleaned_email_text.replace("/think", "")
 
-		# Build context based on parsed commands
-		context = get_context_from_config(db, emb, client_id, cleaned_email_text, context_config)
+		# Route: casual-only emails skip full RAG
+		is_casual_only = labels == ["casual"] or labels == ["casual".strip()]
+		if is_casual_only:
+			LOGGER.info("Casual email detected — skipping deep RAG retrieval")
+			context = ""
+		else:
+			context = get_context_from_config(db, emb, client_id, cleaned_email_text, context_config)
 
 		prompt_template = read_prompt_from_file("mail_prompt.txt")
 		if not prompt_template:
@@ -142,11 +173,12 @@ def reply():
 
 		final_prompt = prompt_template.format(
 			context=context,
+			client_name=client_name,
 			current_email=cleaned_email_text
 		)
 
 		history = [{"role": "system", "content": final_prompt}]
-		llm.init_history('mail', history)
+		llm.init_history(history)
 
 		LOGGER.info("Calling LLM to generate a reply")
 		llm_output = llm.generate_response()
@@ -154,11 +186,10 @@ def reply():
 			continue
 
 		response_msg_id = email.utils.make_msgid()
-		last_mail = unresponded[-1]
 
 		parent_message_id = last_mail['message_id']
 		parent_references = last_mail.get('references') or ''
-		
+
 		ref_list = parent_references.split()
 		if parent_message_id not in ref_list:
 			ref_list.append(parent_message_id)
@@ -181,7 +212,7 @@ def reply():
 				references=new_references,
 				responded=1
 			))
-			embedding = emb.embed(last_mail['subject'], llm_output)
+			embedding = emb.embed(f"Subject: {last_mail['subject']}\nBody: {llm_output}")
 			email_embed_table.insert(dict(
 				email_id=email_id,
 				client_id=client_id,
@@ -204,7 +235,7 @@ def reply():
 		response_mail["In-Reply-To"] = parent_message_id
 		response_mail["References"] = new_references
 		response_mail.attach(MIMEText(llm_output, "plain"))
-		
+
 		LOGGER.debug("Response mail formatted. Sending...")
 		try:
 			with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as smtp_server:
@@ -214,7 +245,7 @@ def reply():
 		except Exception as e:
 			LOGGER.error(f"Error occurred while sending mail: {e}")
 			continue
-		
+
 		# Mark unresponded mails as responded and extract goals
 		try:
 			ids_to_update = [mail['id'] for mail in unresponded]
@@ -222,17 +253,13 @@ def reply():
 			LOGGER.debug(f"Marked {len(ids_to_update)} mails as responded")
 
 			# --- Extract and Save Goals ---
-			# We build a clean conversation history to ensure the LLM can distinguish
-			# between the user and the assistant.
 			conversation_parts = []
 			for mail in unresponded:
-				# Emails from the client are from the "User"
 				if mail['from_addr'] == client:
 					conversation_parts.append(f"User: {mail['body']}")
-				# Emails from us are from the "Assistant"
 				else:
 					conversation_parts.append(f"Assistant: {mail['body']}")
-			
+
 			conversation_for_goal_extraction = "\n\n".join(conversation_parts)
 			extract_and_save_goals(client_id, conversation_for_goal_extraction, last_mail['id'])
 			# --- End Goal Extraction ---

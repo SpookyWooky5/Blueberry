@@ -10,7 +10,7 @@
 import json
 from Logging import logger_init
 from Database import connect_to_dataset
-from LLM import BaseChatbot
+from LLM import OllamaChat
 from utils import read_prompt_from_file, remove_think_blocks, LLM_MODEL
 
 # ============================= GLOBAL VARIABLES ============================= #
@@ -36,8 +36,8 @@ def extract_and_save_goals(client_id: int, conversation_text: str, source_email_
     prompt = prompt_template.format(conversation_text=conversation_text)
 
     try:
-        llm = BaseChatbot(LLM_MODEL)
-        llm.init_history(history=[{"role": "system", "content": prompt}])
+        llm = OllamaChat(LLM_MODEL)
+        llm.init_history([{"role": "system", "content": prompt}])
         response = llm.generate_response()
         clean_response = remove_think_blocks(response)
 

@@ -22,10 +22,10 @@ from dotenv import load_dotenv
 
 from Logging import logger_init
 from Database import connect_to_dataset
-from LLM import BaseChatbot, BaseEmbedder
+from LLM import OllamaChat, OllamaEmbed
 from MailServer import imap_auth, check_smtp_auth
 from Database.populate_db import get_or_create_client
-from utils import load_secrets, load_config, escape_special_chars
+from utils import load_secrets, load_config, escape_special_chars, read_prompt_from_file
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("MailServer")
@@ -65,9 +65,9 @@ def main():
 	client_state_dict = defaultdict(int)
 
 	# Init LLM
-	llm = BaseChatbot(LLM_MODEL)
+	llm = OllamaChat(LLM_MODEL)
 	# Init Embedder
-	emb = BaseEmbedder(EMB_MODEL)
+	emb = OllamaEmbed(EMB_MODEL)
 
 	while True:
 		try:
@@ -190,7 +190,7 @@ def main():
 						body = body,
 						responded = 1
 					))
-					embedding = emb.model.create_embedding(f"Subject:{subject}\nBody:{body}")
+					embedding = emb.embed(f"Subject: {subject}\nBody: {body}")
 					email_embed_table.insert(dict(
 						email_id = email_id,
 						client_id = client_id,
@@ -222,7 +222,7 @@ def main():
 			llm_output = None
 			if client_state_dict[client] != 0:
 				LOGGER.debug("Calling LLM to generate response")
-				llm.init_history("mail")
+				llm.init_history([{"role": "system", "content": read_prompt_from_file("mail_prompt.txt")}])
 				llm_output = llm.generate_response()
 				response_msg_id = email.utils.make_msgid()
 		
@@ -246,7 +246,7 @@ def main():
 						child_of = msg_id,
 						responded = 1
 					))
-					embedding = emb.model.create_embedding(f"Subject:{subject}\nBody:{llm_output}")
+					embedding = emb.embed(f"Subject: {subject}\nBody: {llm_output}")
 					email_embed_table.insert(dict(
 						email_id = email_id,
 						client_id = client_id,

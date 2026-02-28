@@ -22,7 +22,7 @@ from dateutil.relativedelta import relativedelta
 
 from Logging import logger_init
 from LLM.cosine import cosine
-from LLM import BaseChatbot, BaseEmbedder
+from LLM import OllamaChat, OllamaEmbed
 from Database import connect_to_dataset, get_or_create_client
 from utils import (
     load_config,
@@ -55,7 +55,7 @@ def get_relevant_past_memories(db, emb, client_id, current_period_text, top_k=3)
     LOGGER.debug("Finding relevant past memories...")
     try:
         # Embed the summary of the current period's content
-        current_embedding = emb.embed("Current Period Summary", current_period_text)
+        current_embedding = emb.embed(current_period_text)
 
         # Fetch all past memory embeddings for the client
         past_memories = list(db['memory_embeddings'].find(client_id=client_id))
@@ -197,7 +197,7 @@ Body:
 		)
 
 		history = [{"role": "system", "content": prompt}]
-		llm.init_history('summary', history)
+		llm.init_history(history)
 
 		LOGGER.info("Calling LLM to generate a reply")
 		llm_output = llm.generate_response()
@@ -220,7 +220,7 @@ Body:
 			))
 			# Embed the combination of the subject and the generated text for better semantic meaning
 			embedding_text = f"Subject: {subject}\n\nSummary:\n{llm_output}"
-			embedding = emb.embed("Summary Embedding", embedding_text)
+			embedding = emb.embed(embedding_text)
 			mem_emb_table.insert(dict(
 				memory_id=memory_id,
 				client_id=client_id,
@@ -261,9 +261,9 @@ if __name__ == "__main__":
 	summary_type = sys.argv[1]
 
 	# Init LLM
-	llm = BaseChatbot(LLM_MODEL)
+	llm = OllamaChat(LLM_MODEL)
 	# Init Embedder
-	emb = BaseEmbedder(EMB_MODEL)
+	emb = OllamaEmbed(EMB_MODEL)
 
 	today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 	summarize(summary_type, today, llm, emb, True)

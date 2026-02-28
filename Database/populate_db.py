@@ -19,7 +19,7 @@ from dateutil.relativedelta import relativedelta
 
 from Logging import logger_init
 from Database import connect_to_dataset, get_or_create_client
-from LLM import BaseEmbedder, BaseChatbot
+from LLM import OllamaEmbed, OllamaChat
 from LLM.extract_goals import extract_and_save_goals
 from MailServer import imap_auth
 from utils import (
@@ -61,7 +61,7 @@ def populate_emails():
     db = connect_to_dataset()
     email_table = db['emails']
     email_embed_table = db['email_embeddings']
-    emb = BaseEmbedder(EMB_MODEL)
+    emb = OllamaEmbed(EMB_MODEL)
     new_mails_count = 0
 
     all_mails = []
@@ -128,7 +128,7 @@ def populate_emails():
                 subject=subject, body=clean_body,
                 time_received=mail_date, responded=1
             ))
-            embedding = emb.embed(subject, clean_body)
+            embedding = emb.embed(f"Subject: {subject}\nBody: {clean_body}")
             email_embed_table.insert(dict(
                 email_id=email_id, client_id=client_id,
                 model=EMB_MODEL, embedding=pickle.dumps(embedding)
@@ -144,8 +144,8 @@ def populate_memories():
     """Generates historical summaries only for periods that do not already have one."""
     from LLM import summarize
     LOGGER.info("Starting historical memory population.")
-    llm = BaseChatbot(LLM_MODEL)
-    emb = BaseEmbedder(EMB_MODEL)
+    llm = OllamaChat(LLM_MODEL)
+    emb = OllamaEmbed(EMB_MODEL)
     db = connect_to_dataset()
 
     earliest = db['emails'].find_one(order_by='time_received')

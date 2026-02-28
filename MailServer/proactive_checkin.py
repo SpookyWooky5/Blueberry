@@ -15,7 +15,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from Logging import logger_init
-from LLM import BaseChatbot
+from LLM import OllamaChat
 from Database import connect_to_dataset, get_or_create_client
 from utils import (
     read_prompt_from_file,
@@ -105,8 +105,8 @@ def proactive_checkin():
         )
 
         try:
-            llm = BaseChatbot(LLM_MODEL)
-            llm.init_history(history=[{"role": "system", "content": prompt}])
+            llm = OllamaChat(LLM_MODEL)
+            llm.init_history([{"role": "system", "content": prompt}])
             llm_output = llm.generate_response()
             llm_output = remove_think_blocks(llm_output)
         except Exception as e:

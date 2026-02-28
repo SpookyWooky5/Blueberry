@@ -16,7 +16,7 @@ from datetime import timedelta, datetime
 
 import numpy as np
 
-from LLM import BaseEmbedder
+from LLM import OllamaEmbed
 from Logging import logger_init
 from MailServer import imap_auth
 from Database import connect_to_dataset, get_or_create_client
@@ -87,7 +87,7 @@ def insert_mails_to_db(mail_ids):
 	email_embed_table = db['email_embeddings']
 	
 	# Init Embedder
-	emb = BaseEmbedder(EMB_MODEL)
+	emb = OllamaEmbed(EMB_MODEL)
 
 	for mail_id in mail_ids:
 		try:
@@ -166,7 +166,7 @@ def insert_mails_to_db(mail_ids):
 					time_received=mail_datetime,
 					responded=0
 				))
-				embedding = emb.embed(subject, clean_body)
+				embedding = emb.embed(f"Subject: {subject}\nBody: {clean_body}")
 				embedding = np.array(embedding)
 				email_embed_table.insert(dict(
 					email_id=email_id,
