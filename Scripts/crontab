@@ -28,3 +28,6 @@
 
 # At 09:00 daily — goal reminder check (Phase 3)
 0 9 * * * /usr/bin/flock -n /tmp/blueberry_reminder.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/reminder_daemon.py"
+
+# Jan 1 at 02:01 — yearly summary (Phase 4)
+1 2 1 1 * /usr/bin/flock -n /tmp/blueberry.lock -c "/home/mainberry/Dev/Scripts/LoadEnv.sh /home/mainberry/Dev/LLM/summarize.py yearly"

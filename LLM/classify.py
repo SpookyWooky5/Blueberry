@@ -26,6 +26,7 @@ LABELS (choose one or more):
 - goal_acknowledge — explicitly acknowledges a reminder ("yes I'm working on it")
 - goal_update_ambiguous — mentions something that MIGHT be a goal update but confidence is low
 - observation    — self-reflection, doesn't need a deep reply
+- pattern        — explicitly links two topics or identifies a recurring connection
 - knowledge      — technical note or fact to store
 - casual         — greeting, small talk, or simple question
 

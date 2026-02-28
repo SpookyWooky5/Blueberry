@@ -34,6 +34,8 @@ def memory_relpath(summary_type: str, period_start) -> str:
         key = f"{period_start.year}-Q{q}"
     elif summary_type == "monthly":
         key = period_start.strftime("%Y-%m")
+    elif summary_type == "yearly":
+        key = period_start.strftime("%Y")
     else:  # daily
         key = period_start.strftime("%Y-%m-%d")
     return f"Memories/{summary_type}/{key}.md"
@@ -107,7 +109,45 @@ def write_habit(name: str, client_id: int) -> str:
     return rel
 
 
-# Stubs for Phase 4
-def write_observation(content: str, date) -> str: ...
-def write_knowledge(title: str, content: str) -> str: ...
-def write_pattern(title: str, content: str) -> str: ...
+def write_observation(content: str, date) -> str:
+    """Writes a self-reflection to Observations/YYYY-MM-DD-<slug>.md."""
+    date_str = date.strftime("%Y-%m-%d") if hasattr(date, 'strftime') else str(date)
+    slug = _slugify(content[:40])
+    rel = f"Observations/{date_str}-{slug}.md"
+    abs_path = os.path.join(VAULT_DIR, rel)
+    _write(abs_path, {"date": date_str}, content)
+    return rel
+
+
+def write_knowledge(title: str, content: str, is_profile: bool = False) -> str:
+    """Writes to Knowledge/profile.md (append) or Knowledge/topics/<slug>.md (create-once)."""
+    if is_profile:
+        rel = "Knowledge/profile.md"
+        abs_path = os.path.join(VAULT_DIR, rel)
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        Path(LOCK_FILE).touch()
+        try:
+            with open(abs_path, 'a', encoding='utf-8') as f:
+                f.write(f"\n{content}\n")
+        finally:
+            Path(LOCK_FILE).unlink(missing_ok=True)
+        return rel
+    else:
+        slug = _slugify(title)
+        rel = f"Knowledge/topics/{slug}.md"
+        abs_path = os.path.join(VAULT_DIR, rel)
+        if os.path.exists(abs_path):
+            return rel
+        _write(abs_path, {"title": title, "created": datetime.now().strftime("%Y-%m-%d")}, content)
+        return rel
+
+
+def write_pattern(title: str, content: str) -> str:
+    """Writes a detected pattern to Patterns/<slug>.md. No-op if slug already exists."""
+    slug = _slugify(title)
+    rel = f"Patterns/{slug}.md"
+    abs_path = os.path.join(VAULT_DIR, rel)
+    if os.path.exists(abs_path):
+        return rel
+    _write(abs_path, {"title": title, "detected": datetime.now().strftime("%Y-%m-%d")}, content)
+    return rel

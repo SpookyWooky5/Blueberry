@@ -22,6 +22,8 @@ import numpy as np
 from Logging import logger_init
 from LLM.parse import parse, remove_commands
 from LLM.extract_goals import extract_and_save_goals
+from LLM.extract_knowledge import extract_and_save_knowledge
+from LLM.extract_patterns import extract_and_save_pattern
 from LLM.classify import classify_email
 from LLM import OllamaChat, OllamaEmbed, cosine
 from Database import connect_to_dataset, get_or_create_client
@@ -96,6 +98,17 @@ def get_context_from_config(db, emb, client_id, current_email_text, config, labe
             "[NOTE: This email may contain a goal update. If so, include one focused clarifying question: "
             "'Were you updating me on [goal]?']"
         )
+
+    # 1. Inject user profile (always, if file exists — small file, ~200 tokens)
+    profile_path = os.path.join(VAULT_DIR, "Knowledge", "profile.md")
+    if os.path.exists(profile_path):
+        try:
+            with open(profile_path, encoding='utf-8') as f:
+                profile_content = f.read().strip()
+            if profile_content:
+                context_parts.append(f"[USER PROFILE]\n{profile_content}")
+        except Exception as e:
+            LOGGER.error(f"Could not read profile.md: {e}")
 
     # 2. Always inject active goals
     try:
@@ -312,7 +325,19 @@ def reply():
 
 			conversation_for_goal_extraction = "\n\n".join(conversation_parts)
 			extract_and_save_goals(client_id, conversation_for_goal_extraction, last_mail['id'])
-			# --- End Goal Extraction ---
+
+			if 'knowledge' in labels:
+				try:
+					extract_and_save_knowledge(client_id, cleaned_email_text, last_mail['id'])
+				except Exception as e:
+					LOGGER.error(f"Knowledge extraction failed: {e}")
+
+			if 'pattern' in labels:
+				try:
+					extract_and_save_pattern(client_id, cleaned_email_text)
+				except Exception as e:
+					LOGGER.error(f"Pattern extraction failed: {e}")
+			# --- End Goal/Knowledge/Pattern Extraction ---
 
 		except Exception as e:
 			LOGGER.error(f"Could not mark mails as responded or extract goals: {e}")

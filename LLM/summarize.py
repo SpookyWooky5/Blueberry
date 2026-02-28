@@ -25,7 +25,7 @@ from Logging import logger_init
 from LLM.cosine import cosine
 from LLM import OllamaChat, OllamaEmbed
 from Database import connect_to_dataset, get_or_create_client
-from Obsidian import write_memory, memory_relpath
+from Obsidian import write_memory, write_pattern, memory_relpath
 from utils import (
     load_config,
 	remove_think_blocks,
@@ -89,42 +89,84 @@ def get_relevant_past_memories(db, emb, client_id, current_period_text, top_k=3)
         return []
 
 
+def _detect_and_write_pattern(db, llm, emb, client_id: int, summary_text: str, summary_type: str):
+    """Secondary LLM call after monthly/quarterly summaries to detect non-obvious patterns."""
+    try:
+        prompt_template = read_prompt_from_file("pattern_detection_prompt.txt")
+        if not prompt_template:
+            return
+        prompt = prompt_template.format(summary_type=summary_type, summary_text=summary_text)
+        llm.init_history([{"role": "system", "content": prompt}])
+        response = llm.generate_response()
+        if not response:
+            return
+        clean = remove_think_blocks(response).strip()
+        if clean.lower() in ("null", "none", ""):
+            return
+        import json as _json
+        result = _json.loads(clean)
+        title = result.get("title")
+        content = result.get("content", "").strip()
+        if not title or not content:
+            return
+        rel_path = write_pattern(title, content)
+        LOGGER.info(f"Bot-detected pattern written: {rel_path}")
+        embedding = emb.embed(content)
+        if embedding:
+            db['vault_index'].upsert(dict(
+                file_path=rel_path,
+                file_type='pattern',
+                client_id=client_id,
+                model=EMB_MODEL,
+                embedding=pickle.dumps(embedding),
+            ), ['file_path'])
+    except Exception as e:
+        LOGGER.error(f"Bot-initiated pattern detection failed: {e}")
+
+
 def summarize(summary_type, start_date, llm, emb, respond=True):
-	if summary_type not in ("daily", "weekly", "monthly", "quarterly"):
+	if summary_type not in ("daily", "weekly", "monthly", "quarterly", "yearly"):
 		LOGGER.warning(f"Invalid summary type {summary_type}! Ignoring.")
 		return
 	
 	LOGGER.debug(f"Creating {summary_type} summaries")
 
-	cfg = load_config()["Summarizer"][summary_type]
-	period_start = start_date - relativedelta(**cfg["delta"])
+	# Yearly summaries read quarterly vault files directly; skip config source_table
+	is_yearly = (summary_type == "yearly")
+	if not is_yearly:
+		cfg = load_config()["Summarizer"][summary_type]
+	period_start = start_date - relativedelta(years=1) if is_yearly else start_date - relativedelta(**cfg["delta"])
 	period_end = start_date
 
 	# Connect to DB
 	db = connect_to_dataset()
-	table = db[cfg['source_table']]
+	if not is_yearly:
+		table = db[cfg['source_table']]
 
-	# Build filter dict
-	query = {**cfg.get("source_filter", {}),
-			 "client_id": None}
-	# add date filters
-	if cfg["source_table"] == "emails":
-		query["time_received"] = {
-			'gt': period_start,
-			'lt': period_end
-		}
+	# Build filter dict (non-yearly only)
+	if not is_yearly:
+		query = {**cfg.get("source_filter", {}),
+				 "client_id": None}
+		if cfg["source_table"] == "emails":
+			query["time_received"] = {
+				'gt': period_start,
+				'lt': period_end
+			}
+		else:
+			query["period_start"] = {
+				'gte': period_start,
+				'lte': period_end
+			}
+
+	if summary_type == "daily":
+		today = period_start
+		subject = f'Daily Summary {period_start.strftime("%a, %d %B")}'
+	elif summary_type == "yearly":
+		today = period_end
+		subject = f'Yearly Summary {period_start.strftime("%Y")}'
 	else:
-		query["period_start"] = {
-			'gte': period_start,
-			'lte': period_end
-		}
-
-	if summary_type != "daily":
 		today = period_end
 		subject = f'{summary_type.capitalize()} Summary from {period_start.strftime("%a, %d %B")} to {period_end.strftime("%a, %d %B")}'
-	else:
-		today = period_start
-		subject = f'{summary_type.capitalize()} Summary {period_start.strftime("%a, %d %B")}'
 
 	for client, client_name in zip(CLIENTS, CLIENTNAMES):
 		client_id = get_or_create_client(client, client_name)
@@ -138,20 +180,39 @@ def summarize(summary_type, start_date, llm, emb, respond=True):
 			LOGGER.info(f"{summary_type.capitalize()} summary already exists at {rel_path}, skipping.")
 			continue
 
-		try:
-			records = tuple(table.find(**query, order_by='id'))
-		except Exception as e:
-			LOGGER.error(f"Could not retrieve data for the current period, {e}")
-			continue
-		if len(records) == 0:
-			LOGGER.info(f"No data to summarize for client {client_id} in the current period.")
-			continue
-
 		# --- Build Current Period Context ---
 		current_period_content_list = []
-		if summary_type == "daily":
-			for r in records:
-				current_period_content_list.append(f'''[EMAIL]
+
+		if is_yearly:
+			# Read quarterly vault files for this year
+			year = period_start.year
+			all_quarterly = list(db['vault_index'].find(client_id=client_id, file_type='quarterly'))
+			year_records = [r for r in all_quarterly
+							if r['period_start'] and str(r['period_start']).startswith(str(year))]
+			if not year_records:
+				LOGGER.info(f"No quarterly summaries for {year}, skipping yearly summary.")
+				continue
+			for r in year_records:
+				try:
+					post = frontmatter.load(os.path.join(VAULT_DIR, r['file_path']))
+					current_period_content_list.append(
+						f"[QUARTERLY SUMMARY from {r['period_start']}]\n{post.content}\n[/QUARTERLY]"
+					)
+				except Exception as e:
+					LOGGER.error(f"Could not load quarterly vault file {r['file_path']}: {e}")
+		else:
+			try:
+				records = tuple(table.find(**query, order_by='id'))
+			except Exception as e:
+				LOGGER.error(f"Could not retrieve data for the current period, {e}")
+				continue
+			if len(records) == 0:
+				LOGGER.info(f"No data to summarize for client {client_id} in the current period.")
+				continue
+
+			if summary_type == "daily":
+				for r in records:
+					current_period_content_list.append(f'''[EMAIL]
 From: {r["from_name"]}
 To: {r["to_name"]}
 Date: {r["time_received"]}
@@ -159,9 +220,9 @@ Subject: {r["subject"]}
 Body:
 {r["body"]}
 [/EMAIL]''')
-		else:
-			for r in records:
-				current_period_content_list.append(f"[SUMMARY FROM {r['created_at']}]\n{r['text']}\n[/SUMMARY]")
+			else:
+				for r in records:
+					current_period_content_list.append(f"[SUMMARY FROM {r['created_at']}]\n{r['text']}\n[/SUMMARY]")
 		
 		current_period_text = "\n\n".join(current_period_content_list)
 
@@ -189,11 +250,12 @@ Body:
 			LOGGER.error("Failed to read summary prompt, aborting summarization for this client.")
 			continue
 
+		header = cfg["header"].format(client_name=client_name) if not is_yearly else f"Yearly Summary for {client_name}"
 		prompt = prompt_template.format(
 			client_name=client_name,
 			today=today.strftime("%a, %d %B"),
 			summary_type=summary_type,
-			header=cfg["header"].format(client_name=client_name),
+			header=header,
 			content=final_content
 		)
 
@@ -229,7 +291,11 @@ Body:
 		except Exception as e:
 			LOGGER.error(f"Could not insert into vault_index: {e}")
 			db.rollback()
-		
+
+		# Bot-initiated pattern detection (monthly + quarterly only)
+		if summary_type in ("monthly", "quarterly"):
+			_detect_and_write_pattern(db, llm, emb, client_id, llm_output, summary_type)
+
 		# Send summary to client
 		if respond:
 			response_mail = MIMEMultipart()
