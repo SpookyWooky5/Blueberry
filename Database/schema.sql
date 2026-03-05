@@ -20,6 +20,7 @@ CREATE TABLE emails (
   child_of       VARCHAR(255),       -- e.g. parent message_id
   references_     TEXT,               -- For threading
   responded      BOOLEAN        NOT NULL DEFAULT 0,
+  extracted      BOOLEAN        NOT NULL DEFAULT 0,  -- set to 1 after goals/knowledge/pattern extraction
   FOREIGN KEY(child_of) REFERENCES emails(message_id)
 );
 
