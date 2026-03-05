@@ -114,7 +114,7 @@ def get_context_from_config(db, emb, client_id, current_email_text, config, labe
     try:
         active_goals = list(db['client_goals'].find(client_id=client_id, status='active'))
         if active_goals:
-            goals_text = "\n".join(f"- {g['goal_text']}" for g in active_goals)
+            goals_text = "\n".join(f"- {g['goal_text']}" for g in active_goals if g.get('goal_text'))
             context_parts.insert(0, f"[ACTIVE GOALS]\n{goals_text}")
     except Exception as e:
         LOGGER.error(f"Could not retrieve active goals: {e}")

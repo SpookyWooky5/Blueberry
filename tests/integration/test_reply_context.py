@@ -160,7 +160,7 @@ def test_similarity_rag_deduplicates_with_remember(tmp_vault):
 
 # ── Goal acknowledgment ────────────────────────────────────────────────────────
 
-def test_goal_acknowledge_label_triggers_handler(tmp_vault, no_goals_db, mock_emb):
+def test_goal_acknowledge_label_triggers_handler(tmp_vault, mock_emb):
     """goal_acknowledge label should call _handle_goal_acknowledgment without raising."""
     # Create a stub goal file so the function has something to find
     goal_file = tmp_vault / "Goals" / "finish-the-report.md"
@@ -168,20 +168,27 @@ def test_goal_acknowledge_label_triggers_handler(tmp_vault, no_goals_db, mock_em
         "---\nstatus: active\nreminder_count: 2\n---\nFinish the report\n"
     )
     emb_vec = np.array([1.0, 0.0])
-    no_goals_db.__getitem__.return_value.find.return_value = [
-        {
-            "id": 1,
-            "file_path": "Goals/finish-the-report.md",
-            "file_type": "goals",
-            "embedding": pickle.dumps(emb_vec),
-        }
-    ]
+
+    # Use a table-aware mock so client_goals and vault_index return different data
+    vault_record = {
+        "id": 1,
+        "file_path": "Goals/finish-the-report.md",
+        "file_type": "goals",
+        "embedding": pickle.dumps(emb_vec),
+    }
+    goals_table = MagicMock()
+    goals_table.find.return_value = []  # no active goals rows
+    vault_table = MagicMock()
+    vault_table.find.return_value = [vault_record]
+    db = MagicMock()
+    db.__getitem__ = MagicMock(side_effect=lambda name: vault_table if name == "vault_index" else goals_table)
+
     mock_emb.embed.return_value = emb_vec
     config = {"remember": {"enable": False}, "embeds": {"enable": False}}
 
     # Should not raise
     context = get_context_from_config(
-        no_goals_db, mock_emb, 1, "Yes, I'm working on it", config,
+        db, mock_emb, 1, "Yes, I'm working on it", config,
         labels=["goal_acknowledge"]
     )
     assert "[GOAL ACKNOWLEDGED" in context

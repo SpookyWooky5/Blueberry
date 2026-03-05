@@ -1,4 +1,5 @@
 import os
+import re
 import json
 from Logging import logger_init
 from Database import connect_to_dataset
@@ -46,7 +47,10 @@ def infer_and_save_habit(client_id: int, goals: list, conversation_text: str):
         llm.init_history([{"role": "system", "content": prompt}])
         response = llm.generate_response()
         clean = remove_think_blocks(response)
-        result = json.loads(clean.strip())
+        clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', clean.strip(), flags=re.MULTILINE).strip()
+        result = json.loads(clean)
+        if isinstance(result, list):
+            result = result[0] if result else {}
     except json.JSONDecodeError:
         LOGGER.error(f"Habit inference: failed to parse JSON from LLM. Raw: {response!r}")
         return

@@ -112,7 +112,7 @@ def _detect_and_write_pattern(db, llm, emb, client_id: int, summary_text: str, s
         rel_path = write_pattern(title, content)
         LOGGER.info(f"Bot-detected pattern written: {rel_path}")
         embedding = emb.embed(content)
-        if embedding:
+        if embedding is not None and len(embedding) > 0:
             db['vault_index'].upsert(dict(
                 file_path=rel_path,
                 file_type='pattern',
