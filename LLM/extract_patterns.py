@@ -10,13 +10,23 @@ from utils import read_prompt_from_file, remove_think_blocks, LLM_MODEL, EMB_MOD
 LOGGER = logger_init("LLM")
 
 
-def extract_and_save_pattern(client_id: int, email_text: str):
+def extract_and_save_pattern(client_id: int, email_text: str, source_email_id: int = None):
     """
     Extracts a user-identified pattern/connection from an email and writes to vault.
     Idempotent: write_pattern() is a no-op if the slug already exists.
     Embeds the result and upserts vault_index.
     """
     LOGGER.info(f"Starting pattern extraction for client {client_id}")
+
+    email_date = None
+    if source_email_id is not None:
+        try:
+            db_tmp = connect_to_dataset()
+            row = db_tmp['emails'].find_one(id=source_email_id)
+            if row and row.get('time_received'):
+                email_date = row['time_received']
+        except Exception:
+            pass
 
     prompt_template = read_prompt_from_file("pattern_extraction_prompt.txt")
     if not prompt_template:
@@ -49,7 +59,7 @@ def extract_and_save_pattern(client_id: int, email_text: str):
         return
 
     try:
-        rel_path = write_pattern(title, content)
+        rel_path = write_pattern(title, content, email_date=email_date)
         LOGGER.info(f"Wrote pattern to vault: {rel_path}")
     except Exception as e:
         LOGGER.error(f"Could not write pattern to vault: {e}")

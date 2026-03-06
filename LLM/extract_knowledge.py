@@ -10,7 +10,8 @@ from utils import read_prompt_from_file, remove_think_blocks, LLM_MODEL, EMB_MOD
 LOGGER = logger_init("LLM")
 
 
-def extract_and_save_knowledge(client_id: int, email_text: str, source_email_id: int):
+def extract_and_save_knowledge(client_id: int, email_text: str, source_email_id: int,
+                               email_date=None):
     """
     Extracts knowledge from an email and writes to vault.
     Profile facts → Knowledge/profile.md (append)
@@ -18,6 +19,15 @@ def extract_and_save_knowledge(client_id: int, email_text: str, source_email_id:
     Embeds the result and upserts vault_index.
     """
     LOGGER.info(f"Starting knowledge extraction for client {client_id}")
+
+    if email_date is None:
+        try:
+            db_tmp = connect_to_dataset()
+            row = db_tmp['emails'].find_one(id=source_email_id)
+            if row and row.get('time_received'):
+                email_date = row['time_received']
+        except Exception:
+            pass
 
     prompt_template = read_prompt_from_file("knowledge_extraction_prompt.txt")
     if not prompt_template:
@@ -56,7 +66,7 @@ def extract_and_save_knowledge(client_id: int, email_text: str, source_email_id:
         return
 
     try:
-        rel_path = write_knowledge(title, content, is_profile=is_profile)
+        rel_path = write_knowledge(title, content, is_profile=is_profile, email_date=email_date)
         LOGGER.info(f"Wrote knowledge to vault: {rel_path}")
     except Exception as e:
         LOGGER.error(f"Could not write knowledge to vault: {e}")

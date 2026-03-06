@@ -258,7 +258,7 @@ def extract_unprocessed(db):
             LOGGER.error(f"Knowledge extraction failed for email {email_id}: {e}")
 
         try:
-            extract_and_save_pattern(client_id, text)
+            extract_and_save_pattern(client_id, text, email_id)
         except Exception as e:
             LOGGER.error(f"Pattern extraction failed for email {email_id}: {e}")
 

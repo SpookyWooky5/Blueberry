@@ -18,7 +18,7 @@ def _get_existing_habits() -> list[str]:
     return [f[:-3] for f in os.listdir(habits_dir) if f.endswith('.md')]
 
 
-def infer_and_save_habit(client_id: int, goals: list, conversation_text: str):
+def infer_and_save_habit(client_id: int, goals: list, conversation_text: str, email_date=None):
     """
     Infers the habit category for a set of newly extracted goals.
     Creates a habit vault file if needed, links goals to it in vault + SQLite.
@@ -67,7 +67,7 @@ def infer_and_save_habit(client_id: int, goals: list, conversation_text: str):
     if habit_val == "new":
         habit_name = result.get("name", "general")
         try:
-            rel = write_habit(habit_name, client_id)
+            rel = write_habit(habit_name, client_id, email_date=email_date)
             habit_slug = os.path.basename(rel)[:-3]  # strip .md
             LOGGER.info(f"Created new habit: {habit_slug}")
         except Exception as e:

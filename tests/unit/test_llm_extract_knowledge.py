@@ -15,12 +15,14 @@ def test_profile_fact_calls_write_knowledge_is_profile(
         '{"type": "profile", "content": "- Uses Python"}'
     )
     mock_emb_cls.return_value.embed.return_value = np.array([0.1, 0.2])
-    mock_db_cls.return_value.__getitem__.return_value.upsert = MagicMock()
+    mock_table = MagicMock()
+    mock_table.find_one.return_value = None
+    mock_db_cls.return_value.__getitem__.return_value = mock_table
 
     from LLM.extract_knowledge import extract_and_save_knowledge
     extract_and_save_knowledge(1, "I use Python daily", 42)
 
-    mock_wk.assert_called_once_with("knowledge-note", "- Uses Python", is_profile=True)
+    mock_wk.assert_called_once_with("knowledge-note", "- Uses Python", is_profile=True, email_date=None)
 
 
 @patch("LLM.extract_knowledge.connect_to_dataset")
@@ -35,12 +37,14 @@ def test_topic_note_calls_write_knowledge_not_profile(
         '{"type": "topic", "title": "Nix Flakes", "content": "Nix flakes are reproducible."}'
     )
     mock_emb_cls.return_value.embed.return_value = np.array([0.1])
-    mock_db_cls.return_value.__getitem__.return_value.upsert = MagicMock()
+    mock_table = MagicMock()
+    mock_table.find_one.return_value = None
+    mock_db_cls.return_value.__getitem__.return_value = mock_table
 
     from LLM.extract_knowledge import extract_and_save_knowledge
     extract_and_save_knowledge(1, "Let me tell you about Nix flakes", 5)
 
-    mock_wk.assert_called_once_with("Nix Flakes", "Nix flakes are reproducible.", is_profile=False)
+    mock_wk.assert_called_once_with("Nix Flakes", "Nix flakes are reproducible.", is_profile=False, email_date=None)
 
 
 @patch("LLM.extract_knowledge.write_knowledge")

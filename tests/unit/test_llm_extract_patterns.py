@@ -16,12 +16,14 @@ def test_clear_pattern_calls_write_pattern(
     )
     mock_emb_cls.return_value.embed.return_value = np.array([0.1])
     mock_wp.return_value = "Patterns/exercise-and-focus.md"
-    mock_db_cls.return_value.__getitem__.return_value.upsert = MagicMock()
+    mock_table = MagicMock()
+    mock_table.find_one.return_value = None
+    mock_db_cls.return_value.__getitem__.return_value = mock_table
 
     from LLM.extract_patterns import extract_and_save_pattern
     extract_and_save_pattern(1, "I notice I focus better after exercise")
 
-    mock_wp.assert_called_once_with("Exercise and Focus", "They are strongly correlated.")
+    mock_wp.assert_called_once_with("Exercise and Focus", "They are strongly correlated.", email_date=None)
 
 
 @patch("LLM.extract_patterns.write_pattern")

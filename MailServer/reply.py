@@ -334,7 +334,7 @@ def reply():
 
 			if 'pattern' in labels:
 				try:
-					extract_and_save_pattern(client_id, cleaned_email_text)
+					extract_and_save_pattern(client_id, cleaned_email_text, last_mail['id'])
 				except Exception as e:
 					LOGGER.error(f"Pattern extraction failed: {e}")
 			# --- End Goal/Knowledge/Pattern Extraction ---

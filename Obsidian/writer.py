@@ -6,6 +6,15 @@ from datetime import datetime
 
 from utils import VAULT_DIR
 
+
+def _fmt_date(email_date) -> str:
+    """Format a date for frontmatter. Falls back to today if None."""
+    if email_date is None:
+        return datetime.now().strftime("%Y-%m-%d")
+    if hasattr(email_date, 'strftime'):
+        return email_date.strftime("%Y-%m-%d")
+    return str(email_date)[:10]  # handle ISO string from DB
+
 LOCK_FILE = "/tmp/blueberry_bot_writing.lock"
 
 
@@ -56,23 +65,24 @@ def write_memory(summary_type: str, period_start, period_end, content: str,
 
 
 def write_goal(goal_text: str, client_id: int, source_email_id: int,
-               status: str = "active") -> str:
+               context: str = "", email_date=None, status: str = "active") -> str:
     """Writes a goal note to vault. Returns relative path. No-op if file exists."""
     slug = _slugify(goal_text)
     rel = f"Goals/{slug}.md"
     abs_path = os.path.join(VAULT_DIR, rel)
     if os.path.exists(abs_path):
         return rel
+    body = f"{goal_text}\n\n{context}".strip() if context else goal_text
     _write(abs_path, {
         "status": status,
         "client_id": client_id,
-        "created": datetime.now().strftime("%Y-%m-%d"),
+        "created": _fmt_date(email_date),
         "deadline": None,
         "last_reminded": None,
         "reminder_count": 0,
         "source_email_id": source_email_id,
         "tags": [],
-    }, goal_text)
+    }, body)
     return rel
 
 
@@ -94,7 +104,7 @@ def update_goal(slug: str, **fields) -> str:
     return rel
 
 
-def write_habit(name: str, client_id: int) -> str:
+def write_habit(name: str, client_id: int, email_date=None) -> str:
     """Creates a Habits/<slug>.md file. No-op if already exists. Returns relative path."""
     slug = _slugify(name)
     rel = f"Habits/{slug}.md"
@@ -103,7 +113,7 @@ def write_habit(name: str, client_id: int) -> str:
         return rel
     _write(abs_path, {
         "client_id": client_id,
-        "created": datetime.now().strftime("%Y-%m-%d"),
+        "created": _fmt_date(email_date),
         "status": "active",
     }, name)
     return rel
@@ -119,7 +129,7 @@ def write_observation(content: str, date) -> str:
     return rel
 
 
-def write_knowledge(title: str, content: str, is_profile: bool = False) -> str:
+def write_knowledge(title: str, content: str, is_profile: bool = False, email_date=None) -> str:
     """Writes to Knowledge/profile.md (append) or Knowledge/topics/<slug>.md (create-once)."""
     if is_profile:
         rel = "Knowledge/profile.md"
@@ -138,16 +148,16 @@ def write_knowledge(title: str, content: str, is_profile: bool = False) -> str:
         abs_path = os.path.join(VAULT_DIR, rel)
         if os.path.exists(abs_path):
             return rel
-        _write(abs_path, {"title": title, "created": datetime.now().strftime("%Y-%m-%d")}, content)
+        _write(abs_path, {"title": title, "created": _fmt_date(email_date)}, content)
         return rel
 
 
-def write_pattern(title: str, content: str) -> str:
+def write_pattern(title: str, content: str, email_date=None) -> str:
     """Writes a detected pattern to Patterns/<slug>.md. No-op if slug already exists."""
     slug = _slugify(title)
     rel = f"Patterns/{slug}.md"
     abs_path = os.path.join(VAULT_DIR, rel)
     if os.path.exists(abs_path):
         return rel
-    _write(abs_path, {"title": title, "detected": datetime.now().strftime("%Y-%m-%d")}, content)
+    _write(abs_path, {"title": title, "detected": _fmt_date(email_date)}, content)
     return rel
