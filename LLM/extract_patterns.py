@@ -1,5 +1,6 @@
 import json
 import pickle
+import re
 from Logging import logger_init
 from Database import connect_to_dataset
 from LLM import OllamaChat, OllamaEmbed
@@ -28,8 +29,12 @@ def extract_and_save_pattern(client_id: int, email_text: str):
         llm = OllamaChat(LLM_MODEL)
         llm.init_history([{"role": "system", "content": prompt}])
         response = llm.generate_response()
+        if not response:
+            LOGGER.warning("Pattern extraction: empty response from LLM.")
+            return
         clean = remove_think_blocks(response)
-        result = json.loads(clean.strip())
+        clean = re.sub(r'^```(?:json)?\s*|\s*```$', '', clean.strip(), flags=re.MULTILINE).strip()
+        result = json.loads(clean)
     except json.JSONDecodeError:
         LOGGER.error(f"Pattern extraction: failed to parse JSON. Raw: {response!r}")
         return

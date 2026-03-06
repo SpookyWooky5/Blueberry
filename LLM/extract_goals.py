@@ -41,6 +41,9 @@ def extract_and_save_goals(client_id: int, conversation_text: str, source_email_
         llm = OllamaChat(LLM_MODEL)
         llm.init_history([{"role": "system", "content": prompt}])
         response = llm.generate_response()
+        if not response:
+            LOGGER.warning("Goal extraction: empty response from LLM.")
+            return
         clean_response = remove_think_blocks(response)
 
         # The response should be a JSON list of strings.

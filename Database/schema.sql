@@ -1,12 +1,12 @@
 -- 1) Clients table for tenant isolation
-CREATE TABLE clients (
+CREATE TABLE IF NOT EXISTS clients (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   name         VARCHAR(255)    NOT NULL,
   email        VARCHAR(255)    UNIQUE NOT NULL
 );
 
 -- 2) Raw emails, tagged by client
-CREATE TABLE emails (
+CREATE TABLE IF NOT EXISTS emails (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   client_id      INTEGER        NOT NULL REFERENCES clients(id),
   message_id     VARCHAR(255)   NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE emails (
 );
 
 -- 3) Precomputed embeddings for each email
-CREATE TABLE email_embeddings (
+CREATE TABLE IF NOT EXISTS email_embeddings (
   email_id     INTEGER     NOT NULL REFERENCES emails(id) ON DELETE CASCADE,
   client_id    INTEGER     NOT NULL REFERENCES clients(id),
   model        VARCHAR(100) NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE email_embeddings (
 );
 
 -- 4) Hierarchical “memory” summaries
-CREATE TABLE memories (
+CREATE TABLE IF NOT EXISTS memories (
   id           INTEGER     PRIMARY KEY AUTOINCREMENT,
   client_id    INTEGER     NOT NULL REFERENCES clients(id),
   memory_type  VARCHAR(20) NOT NULL,        -- e.g. 'daily','weekly','monthly'
@@ -46,7 +46,7 @@ CREATE TABLE memories (
 );
 
 -- 5) Embeddings for each memory summary
-CREATE TABLE memory_embeddings (
+CREATE TABLE IF NOT EXISTS memory_embeddings (
   memory_id   INTEGER      NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
   client_id   INTEGER      NOT NULL REFERENCES clients(id),
   model       VARCHAR(100) NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE memory_embeddings (
 );
 
 -- 6) Link which raw emails contributed to each memory (optional)
-CREATE TABLE memory_membership (
+CREATE TABLE IF NOT EXISTS memory_membership (
   memory_id  INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
   email_id   INTEGER NOT NULL REFERENCES emails(id)  ON DELETE CASCADE,
   client_id  INTEGER NOT NULL REFERENCES clients(id),
@@ -63,7 +63,7 @@ CREATE TABLE memory_membership (
 );
 
 -- 7) Changes in Obsidian notes
-CREATE TABLE obsidian_changes_history (
+CREATE TABLE IF NOT EXISTS obsidian_changes_history (
   id               INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   message_id       VARCHAR(255),                     -- Mail or conversation thread, optional
   email_id         INTEGER     REFERENCES emails(id),-- Explicit link to an email, if applicable
@@ -75,7 +75,7 @@ CREATE TABLE obsidian_changes_history (
 );
 
 -- 8) Vault file index with embeddings (Phase 2+)
-CREATE TABLE vault_index (
+CREATE TABLE IF NOT EXISTS vault_index (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   file_path    VARCHAR(512) UNIQUE NOT NULL,   -- relative to VAULT_DIR
   file_type    VARCHAR(50)  NOT NULL,          -- 'daily','weekly','monthly','quarterly','goal'
@@ -88,7 +88,7 @@ CREATE TABLE vault_index (
 );
 
 -- 9) Explicitly tracked client goals
-CREATE TABLE client_goals (
+CREATE TABLE IF NOT EXISTS client_goals (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   client_id       INTEGER NOT NULL REFERENCES clients(id),
   goal_text       TEXT NOT NULL,
