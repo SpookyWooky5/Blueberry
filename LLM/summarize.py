@@ -278,6 +278,13 @@ Body:
 		embedding = emb.embed(embedding_text)
 		db.begin()
 		try:
+			memory_id = db['memories'].insert(dict(
+				client_id=client_id,
+				memory_type=summary_type,
+				period_start=period_start,
+				period_end=period_end,
+				text=llm_output,
+			))
 			db['vault_index'].insert(dict(
 				file_path=rel_path,
 				file_type=summary_type,
@@ -288,9 +295,9 @@ Body:
 				period_end=period_end,
 			))
 			db.commit()
-			LOGGER.debug(f"Inserted vault_index row for {rel_path}")
+			LOGGER.debug(f"Inserted memories + vault_index row for {rel_path}")
 		except Exception as e:
-			LOGGER.error(f"Could not insert into vault_index: {e}")
+			LOGGER.error(f"Could not insert into memories/vault_index: {e}")
 			db.rollback()
 
 		# Bot-initiated pattern detection (monthly + quarterly only)
