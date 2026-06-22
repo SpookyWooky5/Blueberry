@@ -206,7 +206,7 @@ def ingest_emails(db, emb, parsed_emails: list[dict]) -> int:
                 body         = p['body'],
                 time_received= p['time_received'],
                 references_  = p['references_'],
-                responded    = 0,
+                responded    = 1,
                 extracted    = 0,
             ))
             if embedding is not None and len(embedding) > 0:
@@ -288,16 +288,19 @@ def run_summaries(llm, emb, db):
 
     for stype, step in SUMMARY_SCHEDULE:
         current = earliest
-        count   = 0
+        written = 0
+        errors  = 0
         while current <= today:
             period_end = datetime.combine(current + step, datetime.min.time())
             try:
-                summarize(stype, period_end, llm, emb, respond=False)
-                count += 1
+                if summarize(stype, period_end, llm, emb, respond=False, db=db):
+                    written += 1
             except Exception as e:
                 LOGGER.error(f"summarize({stype}, {current}) failed: {e}")
+                errors += 1
             current += step
-        print(f"  {stype:<12} {count} period(s) processed.")
+        suffix = f"  ({errors} errors)" if errors else ""
+        print(f"  {stype:<12} {written} written{suffix}")
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
@@ -313,6 +316,10 @@ def main():
     parser.add_argument(
         '--hard_reset', action='store_true',
         help="Truncate all DB tables before backfilling. Obsidian vault is untouched."
+    )
+    parser.add_argument(
+        '--summarize-only', action='store_true',
+        help="Skip Phase 1 (ingest) and Phase 2 (extract). Only run Phase 3 summaries."
     )
     args = parser.parse_args()
 
@@ -334,13 +341,20 @@ def main():
         hard_reset(db)
         sys.exit(0)
 
-    # ── Phase 1: Ingest ────────────────────────────────────────────────────────
     emb = OllamaEmbed(EMB_MODEL)
-    parsed = fetch_seen_emails(since=since)
-    ingest_emails(db, emb, parsed)
 
-    # ── Phase 2: Extract ───────────────────────────────────────────────────────
-    extract_unprocessed(db)
+    if not args.summarize_only:
+        # ── Phase 1: Ingest ────────────────────────────────────────────────────
+        parsed = fetch_seen_emails(since=since)
+        ingest_emails(db, emb, parsed)
+
+        # ── Phase 2: Extract ───────────────────────────────────────────────────
+        extract_unprocessed(db)
+
+    # Unload both models so Phase 3 always starts with clean Ollama memory
+    print("Flushing Ollama model memory before summarisation...")
+    OllamaChat(LLM_MODEL).unload()
+    emb.unload()
 
     # ── Phase 3: Summarize ─────────────────────────────────────────────────────
     llm = OllamaChat(LLM_MODEL)

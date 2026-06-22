@@ -7,6 +7,7 @@
 # ============================================================================ #
 
 # ================================== IMPORTS ================================= #
+import re
 import json
 import pickle
 import numpy as np
@@ -18,7 +19,7 @@ from LLM.extract_habits import infer_and_save_habit
 from Obsidian import write_goal
 from utils import read_prompt_from_file, remove_think_blocks, LLM_MODEL, EMB_MODEL
 
-GOAL_SIM_THRESHOLD = 0.85  # cosine similarity above this → treat as duplicate
+GOAL_SIM_THRESHOLD = 0.75  # cosine similarity above this → treat as duplicate
 
 # ============================= GLOBAL VARIABLES ============================= #
 LOGGER = logger_init("LLM")
@@ -69,6 +70,7 @@ def extract_and_save_goals(client_id: int, conversation_text: str, source_email_
             LOGGER.warning("Goal extraction: empty response from LLM.")
             return
         clean_response = remove_think_blocks(response)
+        clean_response = re.sub(r'^```(?:json)?\s*|\s*```$', '', clean_response.strip(), flags=re.MULTILINE).strip()
         goals = json.loads(clean_response)
         if not isinstance(goals, list):
             LOGGER.warning(f"LLM returned non-list for goals: {goals}")

@@ -124,11 +124,11 @@ def _detect_and_write_pattern(db, llm, emb, client_id: int, summary_text: str, s
         LOGGER.error(f"Bot-initiated pattern detection failed: {e}")
 
 
-def summarize(summary_type, start_date, llm, emb, respond=True):
+def summarize(summary_type, start_date, llm, emb, respond=True, db=None):
 	if summary_type not in ("daily", "weekly", "monthly", "quarterly", "yearly"):
 		LOGGER.warning(f"Invalid summary type {summary_type}! Ignoring.")
 		return
-	
+
 	LOGGER.debug(f"Creating {summary_type} summaries")
 
 	# Yearly summaries read quarterly vault files directly; skip config source_table
@@ -138,8 +138,10 @@ def summarize(summary_type, start_date, llm, emb, respond=True):
 	period_start = start_date - relativedelta(years=1) if is_yearly else start_date - relativedelta(**cfg["delta"])
 	period_end = start_date
 
-	# Connect to DB
-	db = connect_to_dataset()
+	# Connect to DB (reuse caller's connection if provided to avoid fd leaks)
+	_owned_db = db is None
+	if _owned_db:
+		db = connect_to_dataset()
 	if not is_yearly:
 		table = db[cfg['source_table']]
 
@@ -168,6 +170,7 @@ def summarize(summary_type, start_date, llm, emb, respond=True):
 		today = period_end
 		subject = f'{summary_type.capitalize()} Summary from {period_start.strftime("%a, %d %B")} to {period_end.strftime("%a, %d %B")}'
 
+	wrote_summary = False
 	for client, client_name in zip(CLIENTS, CLIENTNAMES):
 		client_id = get_or_create_client(client, client_name)
 		if client_id == -1:
@@ -273,6 +276,7 @@ Body:
 		# Write summary to vault and index
 		rel_path = write_memory(summary_type, period_start, period_end, llm_output, client_id)
 		LOGGER.debug(f"Wrote {summary_type} summary to vault: {rel_path}")
+		wrote_summary = True
 
 		embedding_text = f"Subject: {subject}\n\nSummary:\n{llm_output}"
 		embedding = emb.embed(embedding_text)
@@ -323,6 +327,8 @@ Body:
 			except Exception as e:
 				LOGGER.error(f"Error occured while sending mail, {e}")
 				continue
+
+	return wrote_summary
 
 # =================================== MAIN =================================== #
 if __name__ == "__main__":

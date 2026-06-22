@@ -26,6 +26,7 @@ from LLM.extract_knowledge import extract_and_save_knowledge
 from LLM.extract_patterns import extract_and_save_pattern
 from LLM.classify import classify_email
 from LLM import OllamaChat, OllamaEmbed, cosine
+from LLM.main import MAX_EMBED_CHARS
 from Database import connect_to_dataset, get_or_create_client
 from Obsidian import update_goal
 from Obsidian.writer import _slugify
@@ -213,13 +214,22 @@ def reply():
 		labels = classification.get("labels", ["casual"])
 		LOGGER.info(f"Email classified as: {labels}, tags: {classification.get('tags', [])}")
 
-		raw_email_body = "\n\n---\n\n".join(mail['body'] for mail in unresponded)
 		context_config = parse(unresponded[-1]['body'])
 
-		# Clean the body for the LLM
-		cleaned_email_text = remove_commands(raw_email_body)
-		cleaned_email_text = remove_think_blocks(cleaned_email_text)
-		cleaned_email_text = cleaned_email_text.replace("/think", "")
+		# Clean each email individually, then pack as many as fit within the embed limit
+		separator = "\n\n---\n\n"
+		cleaned_parts = []
+		total_len = 0
+		for mail in unresponded:
+			part = remove_commands(mail['body'])
+			part = remove_think_blocks(part).replace("/think", "")
+			addition_len = len(part) + (len(separator) if cleaned_parts else 0)
+			if total_len + addition_len > MAX_EMBED_CHARS:
+				LOGGER.warning(f"Email context truncated to {len(cleaned_parts)}/{len(unresponded)} emails to stay within embed limit")
+				break
+			cleaned_parts.append(part)
+			total_len += addition_len
+		cleaned_email_text = separator.join(cleaned_parts)
 
 		# Route: casual-only emails skip full RAG
 		is_casual_only = labels == ["casual"] or labels == ["casual".strip()]

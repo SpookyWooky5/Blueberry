@@ -1,5 +1,0 @@
-- update populate db logic to include recent changes wrt goal extraction
-- convert to OOP or split functions to be able to directly call them in populate db
-- Add Obsidian Integration
-- netliveprofile and crontab file ?
-- MCP?
